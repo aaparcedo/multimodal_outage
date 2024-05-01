@@ -11,50 +11,76 @@ import os
 import io
 from PIL import Image
 
-bearer = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJlbWFpbF9hZGRyZXNzIjoiYWJoaW5hdi5rb3R0YUBnbWFpbC5jb20iLCJpc3MiOiJBUFMgT0F1dGgyIEF1dGhlbnRpY2F0b3IiLCJpYXQiOjE3MDcxODE1MjUsIm5iZiI6MTcwNzE4MTUyNSwiZXhwIjoxODY0ODYxNTI1LCJ1aWQiOiJzdXBlcmFiaGkiLCJ0b2tlbkNyZWF0b3IiOiJzdXBlcmFiaGkifQ.VYOPu4zzj6S04u8FcaR2PiUdG5MwoHtnHTa6TaSmd2M"
+
+bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
 # TODO: modify this function to pass in a ratio rater to save_satellite_image_square
 # or (check other function comment)
 def preprocess_raster_images():
 
-  base_dir = '/groups/mli/multimodal_outage/data/black_marble/0'
-  
+  base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq'
+  ntl_dir = os.path.join(base_dir, 'ntl')
+  percent_normal_dir = os.path.join(base_dir, 'percent_normal') 
+ 
+  dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
+
   for county in county_names:
     county_dir = os.path.join(base_dir, county)
+
+    # these two are for the save function
+    save_file_path_ntl = os.path.join(ntl_dir, county)
+    save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
+    os.makedirs(save_file_path_ntl)
+    os.makedirs(save_file_path_percent_normal)
+
     for day in dates:
 
       # day must be in str format, e.g., '2012_01_19'
-      file_path = os.path.join(county_dir, f'{day}.pickle')
+      file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
 
       with open(file_path, 'rb') as file:
         daily_image = pickle.load(file)
 
-      daily_ntl = np.array(daily_image["Gap_Filled_DNB_BRDF-Corrected_NTL"])
+      daily_ntl = np.array(daily_image["DNB_BRDF-Corrected_NTL"])
  
       # TODO:  find the proper year by indexing with the day
+
       # e.g.: if day is '2017-01-01' then the composite should be for 2016
       composite_image = composites[day]
       composite_ntl = np.array(composite_image["NearNadir_Composite_Snow_Free"])
-      # TODO: add a condition that makes sure that dims of daily_ntl and composite_ntl match
-      percent_normal_sat = 100 * (daily_ntl / composite_ntl )
  
-      # send to be resized to a specified tbd size and saved to special folder
-      resize_and_save(raster_image_day, raster_image_composite)
- 
+      # make a copy of the daily image to modify
+      percent_normal_image = daily_image.copy()
 
-# TODO: modify this function to do the same with a numpy array rather than raster image
+      # TODO: add a condition that makes sure that dims of daily_ntl and composite_ntl match 
+      percent_normal_np = 100 * (daily_ntl / (composite_ntl + 1e-10))
+      
+      # this value doesnt actually represent "DNB_BRDF-Corrected_NTL", it represents the percent of normal ratio
+      percent_normal_image['DNB_BRDF-Corrected_NTL'] = (['y', 'x'], percent_normal_np[0])
+
+      # send to be resized to a specified tbd size and saved to special folder
+      save_satellite_image_square(daily_image, save_file_path_ntl) 
+      save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
+
+
 def save_satellite_image_square(raster_image, save_path):
 
-  raster_image = raster_image.isel(time=0)
+  day = str(raster_image.time)[-10:].replace('-', '_')
+  save_path = os.path.join(save_path, f'{day}.jpg')
 
   dpi = 300
-  fig_width = ( raster_image.sizes['x'] * 20) / dpi
-  fig_height = ( raster_image.sizes['y'] * 20)  / dpi
+  fig_width = (raster_image.sizes['x'] * 20) / dpi
+  fig_height = (raster_image.sizes['y'] * 20)  / dpi
 
   fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
 
   # TODO: verify this shading parameter is the same as built-in plot method in BlackMarblePy
-  c = ax.pcolormesh(raster_image.x, raster_image.y, raster_image["DNB_BRDF-Corrected_NTL"], shading='auto', cmap='cividis') 
+  if 'ntl' in save_path:
+    cmap = "cividis"
+  else:
+    cmap = "RdYlGn"
+    
+  c = ax.pcolormesh(raster_image.x, raster_image.y, raster_image["DNB_BRDF-Corrected_NTL"], shading='auto', cmap=cmap)
 
   cx.add_basemap(ax, crs="EPSG:4326")
   plt.gca().set(xticks=[], yticks=[])
@@ -62,12 +88,13 @@ def save_satellite_image_square(raster_image, save_path):
   plt.close(fig)
   
   buf = io.BytesIO()
-  fig.savefig(buf, format='png')
+  fig.savefig(buf, format='jpg')
   buf.seek(0)
   image = Image.open(buf)
-  resized_image = image.resize((512, 512), Image.LANCZOS)
+  resized_image = image.resize((128, 128), Image.LANCZOS)
   resized_image.save(save_path)
   buf.close()
+
 
 def get_gdf(county_name):
   gdf = GADMDownloader(version="4.0").get_shape_data_by_country_name(country_name="USA", ad_level=2)
@@ -75,6 +102,7 @@ def get_gdf(county_name):
   county_gdf  = florida_gdf[florida_gdf['NAME_2'].str.lower().str.replace(' ', '_').str.replace('-', '_') == county_name]   
 
   return county_gdf
+
 
 def download_county_raster(county, quality_flag, start_date, end_date=None):
   """
@@ -91,13 +119,14 @@ def download_county_raster(county, quality_flag, start_date, end_date=None):
   """
 
   county_gdf = get_gdf(county)
+  county_gdf = get_gdf(county)
+
+  county_gdf = get_gdf(county)
   dates = pd.date_range(start_date, end_date if end_date else start_date, freq='D')
   raster = bm_raster(county_gdf, product_id="VNP46A2", date_range=dates, bearer=bearer, variable="DNB_BRDF-Corrected_NTL", quality_flag_rm=quality_flag)
-  print(raster)
   return raster 
 
-# TODO: modify to download one year at a time (pass in an array into bm_raster rather than a single {day})
-# make sure to properly access that (x,y,time) raster to save to appropriate folder as planned
+# TODO: remove, deprecated check download_county_raster_by_year 
 def download_county_raster_in_folder(start_date, end_date, quality_flag):
   """
   Downloads the raster image for all Florida counties within the specified range.  
@@ -193,9 +222,7 @@ def download_county_raster_by_year(quality_flag, first_year, last_year):
   county_names = get_county_names_from_state_gdf()
 
   base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'  
-  flag_dataset_path = os.path.join(base_dataset_path, "hq") # hq because quality_flag_rm=[2, 255]
-  #test_dataset_path = os.path.join(base_dataset_path, 'test')
-  #flag_dataset_path = os.path.join(test_dataset_path, str(quality_flag))
+  flag_dataset_path = os.path.join(base_dataset_path, "hq/original") # hq because quality_flag_rm=[2, 255]
 
   os.makedirs(flag_dataset_path, exist_ok=True)
 
@@ -203,7 +230,7 @@ def download_county_raster_by_year(quality_flag, first_year, last_year):
     for county in county_names:
       flag_county_dataset_path = os.path.join(flag_dataset_path, county)
       os.makedirs(flag_county_dataset_path, exist_ok=True)
-      print(f'Trying {county} for {year}.') 
+      print(f'Trying {county} for {year_start_date[year]}.') 
       try:
         year_raster = download_county_raster(county, quality_flag, year_start_date[year], year_end_date[year])
         num_days_retrieved = year_raster.sizes['time']
@@ -219,9 +246,11 @@ def download_county_raster_by_year(quality_flag, first_year, last_year):
         print(f"Error downloading data for {county} on {year}. Try again. Error: {e}", flush=True)
   print('Successfully saved raster images from 2012 to 2023.')
 
+
 def download_annual_composite(gdf, date):
   annual_composite = bm_raster(gdf, product_id="VNP46A4", date_range=date, bearer=bearer)
   return annual_composite
+
 
 def get_county_names_from_state_gdf(state_gdf=None):
   """
@@ -242,6 +271,7 @@ def get_county_names_from_state_gdf(state_gdf=None):
 
   return normalized_county_names
 
+
 def get_county_dims_from_county_raster(raster):
   """
   Parameters:
@@ -259,6 +289,7 @@ def get_county_dims_from_county_raster(raster):
   xy_dims = tuple(dims[:2])
 
   return xy_dims
+
 
 def get_dims_for_all_counties():
   """
@@ -288,16 +319,11 @@ def get_dims_for_all_counties():
   return counties_dims
 
 
-# for safekeeping:
-# count the # of "on" pixels and mean annual ntl
-#annual_non_zero_non_nan_count = annual_composite['NearNadir_Composite_Snow_Free'].where(annual_composite['NearNadir_Composite_Snow_Free'] != 0).notnull().sum()
-#annual_ntl = np.nanmean(annual_composite['NearNadir_Composite_Snow_Free'].values[0])
-
-
-
+# deprecated check blackmarblepy documentation
 def count_light_pixels(ntl_array):
   non_zero_non_nan_count = np.sum(np.logical_and(ntl_array != 0, ~np.isnan(ntl_array)))
   return non_zero_non_nan_count
+
 
 # Calculate the mean radiance per day using the daily raster images
 def calculate_daily_percent_normal_mean_radiance(raster_dataset, annual_non_zero_non_nan_count, annual_composite, filter_cloudy_days=True):
@@ -339,6 +365,7 @@ def calculate_daily_percent_normal_mean_radiance(raster_dataset, annual_non_zero
         percent_normal_dict[time_index] = daily_percent_normal_radiance
     
     return percent_normal_dict
+
 
 def calculate_mean_annual_radiance_with_relevant_pixels(annual_composite, relevant_pixels_indices):
   """
@@ -610,12 +637,7 @@ def preview_sat_image_qualities(county_name):
   dict_of_xarray_dataset = {}
 
   for quality in quality_list:
-    raster = bm_raster(gdf, product_id="VNP46A2", date_range=dates, bearer = bearer, quality_flag_rm=[quality])
-    dict_of_xarray_dataset[quality] = raster
-
-  plot_sat_images_diff_qualities(dict_of_xarray_dataset, dates)
+    plot_sat_images_diff_qualities(dict_of_xarray_dataset, dates)
 
   return dict_of_daily_raster_arrays
-
-
 
