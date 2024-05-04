@@ -14,10 +14,37 @@ from PIL import Image
 
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
+def find_available_dates(base_dir):
+  """
+  Itererate through all the the county subfolders and find shared dates.
+  """
+
+  county_dirs = os.listdir(base_dir)
+
+  print(county_dirs)
+
+  # Initialize a set to hold the common dates/filenames across all county_dirs
+  common_dates = None
+ 
+  for county_dir in county_dirs:
+    days_avail = os.listdir(os.path.join(base_dir, county_dir))
+    dates_set = {day.split('.')[0] for day in days_avail}  # Set comprehension to extract dates
+    if common_dates is None:
+        common_dates = dates_set
+    else:
+        common_dates = common_dates.intersection(dates_set)
+  common_dates_list = list(common_dates)
+
+  # convert date(s) string to pd.Timestamp
+  common_dates = [pd.Timestamp(date) for date in common_dates_list]
+
+  return common_dates_list
 
 def preprocess_raster_images():
 
   # load monthly composites
+  # TODO: should this be loaded as a dictionary of {county: xarray.Dataset} or load it inside county for loop as just xarray.Dataset
+  # might have to go with latter to save memory
   month_composites = load_month_composites()
 
   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/original'
@@ -26,6 +53,8 @@ def preprocess_raster_images():
  
   # TODO: filter by available dates shared by all counties
   dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
+
+  
 
   for county in county_names:
     county_dir = os.path.join(base_dir, county)
@@ -218,16 +247,16 @@ def big_download_county_raster(quality_flag, county):
   - N/A
   """
 
-  start_date = pd.Timestamp('2012-01-19')
+  #start_date = pd.Timestamp('2012-01-19')
   #end_date = pd.Timestamp('2013-12-31')
   #end_date = pd.Timestamp('2012-12-31')
   #end_date = pd.Timestamp('2017-12-31')
-  #start_date = pd.Timestamp('2017-01-01') 
-  #end_date = pd.Timestamp('2020-12-31')  
+  start_date = pd.Timestamp('2017-01-01') 
+  end_date = pd.Timestamp('2020-12-31')  
   #start_date = pd.Timestamp('2015-01-01')
   
   #start_date = pd.Timestamp('2013-01-01')
-  end_date = pd.Timestamp('2014-12-31')  
+  #end_date = pd.Timestamp('2014-12-31')  
 
   #start_date = pd.Timestamp('2018-01-01')
   #start_date = pd.Timestamp('2022-01-01')
@@ -246,7 +275,8 @@ def big_download_county_raster(quality_flag, county):
     daily_dataset = download_county_raster(county, quality_flag, start_date, end_date)
   except Exception as e:
     print(f"Error: {e}", flush=True)
-  
+    return 
+ 
   num_days_retrieved = daily_dataset.sizes['time']
   
   for day_idx in range(num_days_retrieved): 
