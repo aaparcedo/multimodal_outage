@@ -14,14 +14,17 @@ from PIL import Image
 
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
-# TODO: modify this function to pass in a ratio rater to save_satellite_image_square
-# or (check other function comment)
+
 def preprocess_raster_images():
 
-  base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq'
+  # load monthly composites
+  month_composites = load_month_composites()
+
+  base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/original'
   ntl_dir = os.path.join(base_dir, 'ntl')
   percent_normal_dir = os.path.join(base_dir, 'percent_normal') 
  
+  # TODO: filter by available dates shared by all counties
   dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
 
   for county in county_names:
@@ -41,26 +44,74 @@ def preprocess_raster_images():
       with open(file_path, 'rb') as file:
         daily_image = pickle.load(file)
 
-      daily_ntl = np.array(daily_image["DNB_BRDF-Corrected_NTL"])
- 
-      # TODO:  find the proper year by indexing with the day
-
-      # e.g.: if day is '2017-01-01' then the composite should be for 2016
-      composite_image = composites[day]
-      composite_ntl = np.array(composite_image["NearNadir_Composite_Snow_Free"])
- 
-      # make a copy of the daily image to modify
-      percent_normal_image = daily_image.copy()
-
-      # TODO: add a condition that makes sure that dims of daily_ntl and composite_ntl match 
-      percent_normal_np = 100 * (daily_ntl / (composite_ntl + 1e-10))
-      
-      # this value doesnt actually represent "DNB_BRDF-Corrected_NTL", it represents the percent of normal ratio
-      percent_normal_image['DNB_BRDF-Corrected_NTL'] = (['y', 'x'], percent_normal_np[0])
+      percent_normal_image = calculate_percent_of_normal_of_day(daily_image, month_composites)
 
       # send to be resized to a specified tbd size and saved to special folder
       save_satellite_image_square(daily_image, save_file_path_ntl) 
       save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
+
+
+def calculate_percent_of_normal_of_day(daily_image, month_composites):
+  """
+  Find percent of normal of a day with respect to the last three months.
+
+  Parameters:
+  - daily_image (xarray.Dataset): object of daily satellite image
+  - month_composites (xarray.Dataset)
+
+  Returns:
+  - percent_normal_image: object of daily percent of normal image
+
+  """
+  
+  daily_ntl = np.array(daily_image["DNB_BRDF-Corrected_NTL"])
+
+  # make a copy of the daily image to modify
+  percent_normal_image = daily_image.copy()
+
+  average_month_ntl = average_month_ntl(daily_image, month_composites)
+
+  # ensures that the dims of the daily and monthly composite match
+  daily_ntl = daily_ntl[:, :average_month_ntl.shape[1]]
+
+  percent_normal_np = 100 * (daily_ntl / (average_composite_ntl + 1e-10))
+ 
+  # pad in the case that the dimensions dont match
+  desired_shape = percent_normal_image['DNB_BRDF-Corrected_NTL'].shape
+  pad_width = [(0, desired_shape[i] - percent_normal_np.shape[i]) for i in range(len(desired_shape))]
+  percent_normal_np_padded = np.pad(percent_normal_np, pad_width, mode='constant', constant_values=np.nan)
+ 
+  # this value doesnt actually represent "DNB_BRDF-Corrected_NTL", it represents the percent of normal ratio
+  percent_normal_image['DNB_BRDF-Corrected_NTL'] = (['y', 'x'], percent_normal_np_padded)
+
+  return percent_normal_image
+
+
+def average_month_ntl(daily_image, month_composites):
+  """
+  Calculates the average monthly composite of the last three months from a given date.
+
+  Parameters:
+  - daily_image (xarray.Dataset): 
+  - month_composites (xarray.Dataset): object containing necessary monthly composites
+
+  Returns:
+  average_month_ntl (np.ndarray): represents the last 3 month average ntl
+  """
+
+  day = daily_image.time.values
+
+  # get dates of previous 3 months
+  filtered_dates =  pd.date_range(start=day - pd.DateOffset(months=4), end=day - pd.DateOffset(months=1), freq='MS')
+
+  monthly_ntl = []
+  for month in filtered_dates:
+    month_ntl = np.array(month_composites["NearNadir_Composite_Snow_Free"].sel(time=month))
+    monthly_ntl.append(month_ntl)
+
+  average_month_ntl = np.nanmean(monthly_ntl, axis=0)
+
+  return average_month_ntl
 
 
 def save_satellite_image_square(raster_image, save_path):
@@ -96,6 +147,32 @@ def save_satellite_image_square(raster_image, save_path):
   buf.close()
 
 
+# TODO: download monthly composites to make this usable
+def load_month_composite():
+  """
+  Loads all the available monthly composites into memory.
+
+  Parameters:
+  - N/A
+
+  Returns:
+  - month_composites (xarray.Dataset): dataset of monthly composites
+  """
+
+
+  base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/month"
+  
+  # TODO: download and name
+  month_composites_file_path = "composites.pickle"
+
+  with open(month_composites_file_path, 'rb') as file:
+    month_composites = pickle.load(file)
+
+  return month_composites
+
+
+
+
 def get_gdf(county_name):
   gdf = GADMDownloader(version="4.0").get_shape_data_by_country_name(country_name="USA", ad_level=2)
   florida_gdf = gdf[gdf['NAME_1'] == 'Florida'] 
@@ -126,125 +203,58 @@ def download_county_raster(county, quality_flag, start_date, end_date=None):
   raster = bm_raster(county_gdf, product_id="VNP46A2", date_range=dates, bearer=bearer, variable="DNB_BRDF-Corrected_NTL", quality_flag_rm=quality_flag)
   return raster 
 
-# TODO: remove, deprecated check download_county_raster_by_year 
-def download_county_raster_in_folder(start_date, end_date, quality_flag):
+
+
+def big_download_county_raster(quality_flag, county):
   """
-  Downloads the raster image for all Florida counties within the specified range.  
-
-  Parameters:
-  - start_date (str): Start date in 'YYYY-MM-DD' format.
-  - end_date (str): End date in 'YYYY-MM-DD' format.
-  - quality_flag (int): Quality flag to select specific raster data.
-
-  Returns:
-  - None
-  """
-
-  desired_dates = pd.date_range(start_date, end_date, freq='D')
-  county_names = get_county_names_from_state_gdf()
-
-  base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
-  flag_dataset_path = os.path.join(base_dataset_path, str(quality_flag))
-  log_folder_path = os.path.join(base_dataset_path, 'download_logs')
-  csv_file_path = os.path.join(log_folder_path, f'quality_flag_{quality_flag}.csv')
-
-  os.makedirs(flag_dataset_path, exist_ok=True)
-  os.makedirs(log_folder_path, exist_ok=True)
-
-  if os.path.exists(csv_file_path):
-    df = pd.read_csv(csv_file_path, index_col=0, parse_dates=True, infer_datetime_format=True)
-    df = df.reindex(df.index.union(desired_dates))
-  else:
-    df = pd.DataFrame(index=pd.to_datetime(desired_dates).normalize(), columns=county_names)
-    df.to_csv(csv_file_path)
-  
-  df.index = df.index.normalize()
-
-  for day in desired_dates:
-    start_time = datetime.now() 
-    for county in county_names:
-   
-      flag_county_dataset_path = os.path.join(flag_dataset_path, county)
-      os.makedirs(flag_county_dataset_path, exist_ok=True)
-      pickle_path = os.path.join(flag_county_dataset_path, f"{day.strftime('%Y_%m_%d')}.pickle")
-
-      # Check if the value is already filled in before any processing
-      if pd.isna(df.loc[day, county]):
-        try:
-          raster = download_county_raster(county, day, quality_flag)
-          df.loc[day, county] = 1
-          
-          with open(pickle_path, 'wb') as pickled_raster:
-            pickle.dump(raster, pickled_raster)
-#          print(f"Filled in value for {county} on {day}", flush=True)
-        except Exception as e:
-          print(f"No data found for {county} on {day}, error: {e}", flush=True)
-          df.loc[day, county] = 0
-      else:
-        print(f"Value for {county} on {day} already filled, skipping.", flush=True)
-    
-    df.to_csv(csv_file_path)
-    end_time = datetime.now()
-    time_taken = end_time - start_time
-    print(f'Saved satellite images of all counties for {day}. Processing took {time_taken}.')
-
-
-
-def download_county_raster_by_year(quality_flag, first_year, last_year):
-  """
-  Download satellite image rasters for all FL counties one year at a time.
+  Download all daily files from start_date to end_date for a county.
+  Passes quality flag to Black Marble download function. 
 
   Parameters:
   - quality_flag (list): desired quality, e.g., [2, 255]
-  - first_year (str): year we want the download to start from
-  - last_year (str): year we want the download to end
+  - county (str): name of county we want to download files for (e.g., 'orange')
 
   Returns:
   - N/A
   """
 
-  year_start_date = pd.date_range(first_year, last_year, freq='YS')
-  year_end_date = pd.date_range(first_year, last_year, freq='YE')
+  start_date = pd.Timestamp('2012-01-19')
+  #end_date = pd.Timestamp('2013-12-31')
+  #end_date = pd.Timestamp('2012-12-31')
+  #end_date = pd.Timestamp('2017-12-31')
+  #start_date = pd.Timestamp('2017-01-01') 
+  #end_date = pd.Timestamp('2020-12-31')  
+  #start_date = pd.Timestamp('2015-01-01')
+  
+  #start_date = pd.Timestamp('2013-01-01')
+  end_date = pd.Timestamp('2014-12-31')  
 
-  special_year_start_date = list(year_start_date) 
-  special_year_end_date = list(year_end_date)
-
-  if first_year == '2012':
-    print('special start date')
-    special_year_start_date[0] = pd.Timestamp('2012-01-19') 
-    year_start_date = pd.DatetimeIndex(special_year_start_date)
- 
-  if last_year == '2025':
-    print(f'special end date')
-    special_year_end_date[-1] = pd.Timestamp('2024-04-17')  
-    year_end_date = pd.DatetimeIndex(special_year_end_date)
-
-  county_names = get_county_names_from_state_gdf()
+  #start_date = pd.Timestamp('2018-01-01')
+  #start_date = pd.Timestamp('2022-01-01')
+  #start_date = pd.Timestamp('2021-01-01')
+  #end_date = pd.Timestamp('2024-04-17')
 
   base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'  
   flag_dataset_path = os.path.join(base_dataset_path, "hq/original") # hq because quality_flag_rm=[2, 255]
 
   os.makedirs(flag_dataset_path, exist_ok=True)
 
-  for year in range(len(year_start_date)):
-    for county in county_names:
-      flag_county_dataset_path = os.path.join(flag_dataset_path, county)
-      os.makedirs(flag_county_dataset_path, exist_ok=True)
-      print(f'Trying {county} for {year_start_date[year]}.') 
-      try:
-        year_raster = download_county_raster(county, quality_flag, year_start_date[year], year_end_date[year])
-        num_days_retrieved = year_raster.sizes['time']
-        
-        for day_idx in range(num_days_retrieved):
-          raster = year_raster.isel(time=day_idx)
-          day = str(raster.coords['time'])[-10:].replace('-', '_')
+  flag_county_dataset_path = os.path.join(flag_dataset_path, county)
+  os.makedirs(flag_county_dataset_path, exist_ok=True)
 
-          pickle_path = os.path.join(flag_county_dataset_path, f"{day}.pickle")
-          with open(pickle_path, 'wb') as pickled_raster:
-            pickle.dump(raster, pickled_raster)
-      except Exception as e:
-        print(f"Error downloading data for {county} on {year}. Try again. Error: {e}", flush=True)
-  print('Successfully saved raster images from 2012 to 2023.')
+  try:
+    daily_dataset = download_county_raster(county, quality_flag, start_date, end_date)
+  except Exception as e:
+    print(f"Error: {e}", flush=True)
+  
+  num_days_retrieved = daily_dataset.sizes['time']
+  
+  for day_idx in range(num_days_retrieved): 
+    raster = daily_dataset.isel(time=day_idx)
+    day = str(raster.coords['time'])[-10:].replace('-', '_')
+    pickle_path = os.path.join(flag_county_dataset_path, f"{day}.pickle")
+    with open(pickle_path, 'wb') as pickled_raster:
+      pickle.dump(raster, pickled_raster)
 
 
 def download_annual_composite(gdf, date):
