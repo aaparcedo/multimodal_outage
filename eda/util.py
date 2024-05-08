@@ -10,74 +10,139 @@ import contextily as cx
 import os
 import io
 from PIL import Image
-
+import random
+import time
+import concurrent.futures
+import xarray as xr
 
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
+
+
+def preprocess_image(file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal):
+    with open(file_path, 'rb') as file:
+        daily_image = pickle.load(file)
+
+    percent_normal_image = calculate_percent_of_normal_of_day(daily_image, month_composites)
+
+    save_satellite_image_square(daily_image, save_file_path_ntl)
+    save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
+
+#def preprocess_raster_images():
+#    start_time = time.time()  # Record start time
+    #county_names = get_county_names_from_state_gdf()
+
+#    county_names = ["sarasota", "manatee", "collier"]
+
+ #   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
+  #  raw_dir = os.path.join(base_dir, 'original')
+
+   # ntl_dir = os.path.join(base_dir, 'ntl')
+    #percent_normal_dir = os.path.join(base_dir, 'percent_normal')
+
+   # dates = find_available_dates(raw_dir)
+   # dates = random.sample(dates, 100)
+
+  #  with concurrent.futures.ThreadPoolExecutor() as executor:
+   #     futures = []
+    #    for county in county_names:
+     #       county_dir = os.path.join(raw_dir, county)
+      #      month_composites = load_month_composites(county)
+#            save_file_path_ntl = os.path.join(ntl_dir, county)
+ #           save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
+  #          os.makedirs(save_file_path_ntl, exist_ok=True)
+   #         os.makedirs(save_file_path_percent_normal, exist_ok=True)
+    #        for day in dates:
+     #           file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
+      #          future = executor.submit(preprocess_image, file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal)
+       #         futures.append(future)
+        #    concurrent.futures.wait(futures)
+         #   print(f"finished processing for {county}")
+ 
+       # Wait for all tasks to complete
+       # concurrent.futures.wait(futures)
+
+   # end_time = time.time()  # Record end time
+   # execution_time = end_time - start_time
+   # print(f"Script execution time: {execution_time} seconds")
+
 
 def find_available_dates(base_dir):
   """
   Itererate through all the the county subfolders and find shared dates.
+  
+  Parameters:
+  - base_dir (str): directory of interest
+
+  Returns:
+  common_dates (list): pd.Timestamps of shared dates
   """
 
   county_dirs = os.listdir(base_dir)
 
-  print(county_dirs)
-
   # Initialize a set to hold the common dates/filenames across all county_dirs
   common_dates = None
  
-  for county_dir in county_dirs:
+  for county_idx, county_dir in enumerate(county_dirs):
     days_avail = os.listdir(os.path.join(base_dir, county_dir))
     dates_set = {day.split('.')[0] for day in days_avail}  # Set comprehension to extract dates
+
     if common_dates is None:
         common_dates = dates_set
     else:
         common_dates = common_dates.intersection(dates_set)
+    
   common_dates_list = list(common_dates)
 
   # convert date(s) string to pd.Timestamp
-  common_dates = [pd.Timestamp(date) for date in common_dates_list]
+  common_dates = [pd.Timestamp(date.replace('_', '-')) for date in common_dates_list]
 
-  return common_dates_list
+  return common_dates
 
 def preprocess_raster_images():
 
-  # load monthly composites
-  # TODO: should this be loaded as a dictionary of {county: xarray.Dataset} or load it inside county for loop as just xarray.Dataset
-  # might have to go with latter to save memory
-  month_composites = load_month_composites()
+  start_time = time.time()  # Record start time
 
-  base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/original'
+  county_names = get_county_names_from_state_gdf()
+  county_names = county_names[8:]
+  print(county_names)
+
+  #county_names = ["manatee"]
+  base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
+  raw_dir = os.path.join(base_dir, 'original')
   ntl_dir = os.path.join(base_dir, 'ntl')
   percent_normal_dir = os.path.join(base_dir, 'percent_normal') 
  
-  # TODO: filter by available dates shared by all counties
-  dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
-
-  
+  dates = find_available_dates(raw_dir) 
+  # sample
+  #dates = random.sample(dates, 100)
+  dates = dates[-100:]
 
   for county in county_names:
-    county_dir = os.path.join(base_dir, county)
+    county_dir = os.path.join(raw_dir, county)
+    month_composites = load_month_composites(county)
 
     # these two are for the save function
     save_file_path_ntl = os.path.join(ntl_dir, county)
     save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
-    os.makedirs(save_file_path_ntl)
-    os.makedirs(save_file_path_percent_normal)
+    os.makedirs(save_file_path_ntl, exist_ok=True)
+    os.makedirs(save_file_path_percent_normal, exist_ok=True)
 
-    for day in dates:
-
+    for day_idx, day in enumerate(dates):
       # day must be in str format, e.g., '2012_01_19'
       file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
-
+      
       with open(file_path, 'rb') as file:
         daily_image = pickle.load(file)
-
+ 
       percent_normal_image = calculate_percent_of_normal_of_day(daily_image, month_composites)
 
       # send to be resized to a specified tbd size and saved to special folder
       save_satellite_image_square(daily_image, save_file_path_ntl) 
       save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
+    
+  end_time = time.time()  # Record end time
+  execution_time = end_time - start_time
+  print(f"Script execution time: {execution_time} seconds")
 
 
 def calculate_percent_of_normal_of_day(daily_image, month_composites):
@@ -92,31 +157,54 @@ def calculate_percent_of_normal_of_day(daily_image, month_composites):
   - percent_normal_image: object of daily percent of normal image
 
   """
-  
+ 
   daily_ntl = np.array(daily_image["DNB_BRDF-Corrected_NTL"])
-
-  # make a copy of the daily image to modify
+  average_month_ntl = calculate_average_month_ntl(daily_image, month_composites)
   percent_normal_image = daily_image.copy()
 
-  average_month_ntl = average_month_ntl(daily_image, month_composites)
+  if daily_ntl.shape != average_month_ntl.shape:
+    min_shape = tuple(min(daily_ntl.shape[i], average_month_ntl.shape[i]) for i in range(len(daily_ntl.shape)))
+    daily_ntl_sliced = daily_ntl[:min_shape[0], :min_shape[1]]
+    average_month_ntl_sliced = average_month_ntl[:min_shape[0], :min_shape[1]]
+    percent_normal_np = 100 * (daily_ntl_sliced / (average_month_ntl_sliced + 1e-10))
 
-  # ensures that the dims of the daily and monthly composite match
-  daily_ntl = daily_ntl[:, :average_month_ntl.shape[1]]
+    if percent_normal_np.shape != daily_ntl.shape:
+      # pad or truncate percent_normal_np to match daily_ntl shape
+      pad_width = [(0, 0)] * len(daily_ntl.shape)
+      for i in range(len(daily_ntl.shape)):
+        diff = daily_ntl.shape[i] - percent_normal_np.shape[i]
+        if diff > 0:
+          pad_width[i] = (0, diff)
+        elif diff < 0:
+          percent_normal_np = percent_normal_np[tuple(slice(None, diff) if dim_idx == i else slice(None) for dim_idx in range(len(daily_ntl.shape)))]
+      percent_normal_np = np.pad(percent_normal_np, pad_width, mode='constant', constant_values=np.nan)
 
-  percent_normal_np = 100 * (daily_ntl / (average_composite_ntl + 1e-10))
- 
-  # pad in the case that the dimensions dont match
-  desired_shape = percent_normal_image['DNB_BRDF-Corrected_NTL'].shape
-  pad_width = [(0, desired_shape[i] - percent_normal_np.shape[i]) for i in range(len(desired_shape))]
-  percent_normal_np_padded = np.pad(percent_normal_np, pad_width, mode='constant', constant_values=np.nan)
- 
+  else:
+    percent_normal_np = 100 * (daily_ntl / (average_month_ntl + 1e-10))
+
   # this value doesnt actually represent "DNB_BRDF-Corrected_NTL", it represents the percent of normal ratio
-  percent_normal_image['DNB_BRDF-Corrected_NTL'] = (['y', 'x'], percent_normal_np_padded)
+  percent_normal_image["DNB_BRDF-Corrected_NTL"] = xr.DataArray(percent_normal_np, dims=('y', 'x'))
 
   return percent_normal_image
 
 
-def average_month_ntl(daily_image, month_composites):
+def pad_smaller_satellite_image(daily_ntl, average_month_ntl):
+  # Calculate the padding for each dimension
+  pad_width = []
+  for i in range(len(daily_ntl.shape)): 
+    diff = abs(average_month_ntl.shape[i] - daily_ntl.shape[i])
+    pad_width.append((0, diff))  # Pad with zeros if smaller, else no padding
+
+  # Pad the smaller array
+  if np.prod(daily_ntl.shape) < np.prod(average_month_ntl.shape):
+    daily_ntl = np.pad(daily_ntl, pad_width, mode='constant', constant_values=0)
+  else:
+    average_month_ntl = np.pad(average_month_ntl, pad_width, mode='constant', constant_values=0)
+
+  return daily_ntl, average_month_ntl
+
+
+def calculate_average_month_ntl(daily_image, month_composites):
   """
   Calculates the average monthly composite of the last three months from a given date.
 
@@ -130,6 +218,8 @@ def average_month_ntl(daily_image, month_composites):
 
   day = daily_image.time.values
 
+  np.set_printoptions(threshold=np.inf)
+
   # get dates of previous 3 months
   filtered_dates =  pd.date_range(start=day - pd.DateOffset(months=4), end=day - pd.DateOffset(months=1), freq='MS')
 
@@ -137,80 +227,111 @@ def average_month_ntl(daily_image, month_composites):
   for month in filtered_dates:
     month_ntl = np.array(month_composites["NearNadir_Composite_Snow_Free"].sel(time=month))
     monthly_ntl.append(month_ntl)
+   
 
-  average_month_ntl = np.nanmean(monthly_ntl, axis=0)
+  # calculate pixel-wise mean of last three months, ignoring NaN values 
+  average_month_ntl = np.nanmean(monthly_ntl, axis=0, where=~np.isnan(monthly_ntl))
 
   return average_month_ntl
 
+
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 def save_satellite_image_square(raster_image, save_path):
 
   day = str(raster_image.time)[-10:].replace('-', '_')
   save_path = os.path.join(save_path, f'{day}.jpg')
 
-  dpi = 300
-  fig_width = (raster_image.sizes['x'] * 20) / dpi
-  fig_height = (raster_image.sizes['y'] * 20)  / dpi
+  fig_width = raster_image.sizes['x'] / 10 
+  fig_height = raster_image.sizes['y'] / 10
+  fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
-  fig, ax = plt.subplots(figsize=(fig_width, fig_height), dpi=dpi)
-
-  # TODO: verify this shading parameter is the same as built-in plot method in BlackMarblePy
   if 'ntl' in save_path:
     cmap = "cividis"
   else:
     cmap = "RdYlGn"
+
     
   c = ax.pcolormesh(raster_image.x, raster_image.y, raster_image["DNB_BRDF-Corrected_NTL"], shading='auto', cmap=cmap)
-
   cx.add_basemap(ax, crs="EPSG:4326")
   plt.gca().set(xticks=[], yticks=[])
   plt.tight_layout(pad=0)
-  plt.close(fig)
-  
-  buf = io.BytesIO()
-  fig.savefig(buf, format='jpg')
-  buf.seek(0)
-  image = Image.open(buf)
-  resized_image = image.resize((128, 128), Image.LANCZOS)
+
+  canvas = FigureCanvasAgg(fig)
+  canvas.draw()
+
+  pil_image = Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
+  resized_image = pil_image.resize((128, 128), Image.LANCZOS)
   resized_image.save(save_path)
-  buf.close()
+  plt.close(fig)
 
 
-# TODO: download monthly composites to make this usable
-def load_month_composite():
+def load_month_composites(county_name):
   """
   Loads all the available monthly composites into memory.
 
   Parameters:
-  - N/A
+  - county_name (str): name of county, e.g., 'orange'
 
   Returns:
   - month_composites (xarray.Dataset): dataset of monthly composites
   """
 
+  base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/monthly"
+  county_dir = os.path.join(base_dir, county_name)  
 
-  base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/month"
-  
-  # TODO: download and name
-  month_composites_file_path = "composites.pickle"
+  file_path = os.path.join(county_dir, f"{county_name}.pickle")
 
-  with open(month_composites_file_path, 'rb') as file:
+  with open(file_path, 'rb') as file:
     month_composites = pickle.load(file)
 
   return month_composites
 
 
+def download_monthly_composites(quality_flag):
+  """
+  Download all month files.
+  Passes quality flag to Black Marble download function. 
+
+  Parameters:
+  - quality_flag (list): desired quality, e.g., [1, 255]
+
+  Returns:
+  - N/A
+  """
+
+  county_names = get_county_names_from_state_gdf()
+
+  start_date = pd.Timestamp('2012-01-19')
+  end_date = pd.Timestamp('2024-04-17')
+
+  base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
+  flag_dataset_path = os.path.join(base_dataset_path, "hq/monthly") # hq because quality_flag_rm=[2, 255]
+  os.makedirs(flag_dataset_path, exist_ok=True)
+
+  for county in county_names:
+    flag_county_dataset_path = os.path.join(flag_dataset_path, county)
+    os.makedirs(flag_county_dataset_path, exist_ok=True)
+
+    try:
+      monthly_dataset = download_county_raster(county, quality_flag, 'MS', start_date, end_date)
+    except Exception as e:
+      print(f"Error: {e}", flush=True)
+      return
+
+    pickle_path = os.path.join(flag_county_dataset_path, f"{county}.pickle")
+    with open(pickle_path, 'wb') as pickled_monthly_dataset:
+      pickle.dump(monthly_dataset, pickled_monthly_dataset)
 
 
 def get_gdf(county_name):
   gdf = GADMDownloader(version="4.0").get_shape_data_by_country_name(country_name="USA", ad_level=2)
   florida_gdf = gdf[gdf['NAME_1'] == 'Florida'] 
   county_gdf  = florida_gdf[florida_gdf['NAME_2'].str.lower().str.replace(' ', '_').str.replace('-', '_') == county_name]   
-
   return county_gdf
 
 
-def download_county_raster(county, quality_flag, start_date, end_date=None):
+def download_county_raster(county, quality_flag, freq, start_date, end_date=None):
   """
   Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
 
@@ -219,72 +340,92 @@ def download_county_raster(county, quality_flag, start_date, end_date=None):
   - start_date (Timestamp) :
   - end_date (Timestamp) :
   - quality_flag (list): desired quality flag, e.g., [2, 255]
+  - freq (str): frequency of image (options 'D' or 'MS')
 
   Returns:
   raster (xarray): object of satellite image
-  """
+  """  
 
   county_gdf = get_gdf(county)
-  county_gdf = get_gdf(county)
+  dates = pd.date_range(start_date, end_date if end_date else start_date, freq=freq)
 
-  county_gdf = get_gdf(county)
-  dates = pd.date_range(start_date, end_date if end_date else start_date, freq='D')
-  raster = bm_raster(county_gdf, product_id="VNP46A2", date_range=dates, bearer=bearer, variable="DNB_BRDF-Corrected_NTL", quality_flag_rm=quality_flag)
+  if freq == 'D':
+    product_id = "VNP46A2"
+    variable = "DNB_BRDF-Corrected_NTL"
+  elif freq == 'MS':
+    product_id = "VNP46A3"
+    variable = "NearNadir_Composite_Snow_Free"
+  else:
+    print("Pick a valid time frequency, i.e., 'D' or 'M'")
+
+  raster = bm_raster(county_gdf, product_id=product_id, date_range=dates, bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
+  
   return raster 
 
 
 
-def big_download_county_raster(quality_flag, county):
+def download_missing_dates(dataset_county_path):
   """
-  Download all daily files from start_date to end_date for a county.
-  Passes quality flag to Black Marble download function. 
+  Find dates where Black Marble data is missing.
 
   Parameters:
-  - quality_flag (list): desired quality, e.g., [2, 255]
-  - county (str): name of county we want to download files for (e.g., 'orange')
+  - dataset_county_path (str): the path to the dataset directory for the county
+
+  Returns:
+  - inverse_dates
+  """
+
+  # want data in this time frame
+  required_dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
+  
+  available_data_file_names = os.listdir(dataset_county_path)
+  available_data_file_names_formatted = pd.to_datetime([file_name.replace('_', '-').replace('.pickle', '') for file_name in available_data_file_names])
+ 
+  inverse_dates = required_dates[~required_dates.isin(available_data_file_names_formatted)]
+
+  return inverse_dates
+
+
+def big_download_fl_county_raster():
+  """
+
+  Parameters:
 
   Returns:
   - N/A
   """
 
-  #start_date = pd.Timestamp('2012-01-19')
-  #end_date = pd.Timestamp('2013-12-31')
-  #end_date = pd.Timestamp('2012-12-31')
-  #end_date = pd.Timestamp('2017-12-31')
-  start_date = pd.Timestamp('2017-01-01') 
-  end_date = pd.Timestamp('2020-12-31')  
-  #start_date = pd.Timestamp('2015-01-01')
-  
-  #start_date = pd.Timestamp('2013-01-01')
-  #end_date = pd.Timestamp('2014-12-31')  
-
-  #start_date = pd.Timestamp('2018-01-01')
-  #start_date = pd.Timestamp('2022-01-01')
-  #start_date = pd.Timestamp('2021-01-01')
-  #end_date = pd.Timestamp('2024-04-17')
-
   base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'  
   flag_dataset_path = os.path.join(base_dataset_path, "hq/original") # hq because quality_flag_rm=[2, 255]
 
-  os.makedirs(flag_dataset_path, exist_ok=True)
+  county_names = ["glades", "gulf", "hamilton", "hendry", "hernando", "hillsborough"]
+  exception_list = []
 
-  flag_county_dataset_path = os.path.join(flag_dataset_path, county)
-  os.makedirs(flag_county_dataset_path, exist_ok=True)
+  for county in county_names:
+    flag_county_dataset_path = os.path.join(flag_dataset_path, county)
 
-  try:
-    daily_dataset = download_county_raster(county, quality_flag, start_date, end_date)
-  except Exception as e:
-    print(f"Error: {e}", flush=True)
-    return 
+    gdf = get_gdf(county)
+    missing_dates = download_missing_dates(flag_county_dataset_path)
+      
+    try:
+      daily_dataset = bm_raster(gdf, product_id="VNP46A2", date_range=missing_dates, bearer=bearer, variable="DNB_BRDF-Corrected_NTL", quality_flag_rm=[2, 255]) 
+    except Exception as e:
+      print(f"Error for {county}: {e}", flush=True)
+      exception_list.append((county, e))
+      continue
  
-  num_days_retrieved = daily_dataset.sizes['time']
+    num_days_retrieved = daily_dataset.sizes['time']
   
-  for day_idx in range(num_days_retrieved): 
-    raster = daily_dataset.isel(time=day_idx)
-    day = str(raster.coords['time'])[-10:].replace('-', '_')
-    pickle_path = os.path.join(flag_county_dataset_path, f"{day}.pickle")
-    with open(pickle_path, 'wb') as pickled_raster:
-      pickle.dump(raster, pickled_raster)
+    for day_idx in range(num_days_retrieved): 
+      raster = daily_dataset.isel(time=day_idx)
+      day = str(raster.coords['time'])[-10:].replace('-', '_')
+      pickle_path = os.path.join(flag_county_dataset_path, f"{day}.pickle")
+      with open(pickle_path, 'wb') as pickled_raster:
+        pickle.dump(raster, pickled_raster)
+    print(f"Successfully downloaded all available dates for {county}")
+  
+  print(f'finished downloading all data')
+  print(exception_list)
 
 
 def download_annual_composite(gdf, date):
