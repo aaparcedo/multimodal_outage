@@ -20,7 +20,7 @@ class DoubleConv(nn.Module):
 
     def forward(self, x):
         return self.double_conv(x)
-
+    
 class Down(nn.Module):
 
     def __init__(self, in_channels, out_channels):
@@ -59,8 +59,7 @@ class OutConv(nn.Module):
         self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x):
-        return self.conv(x)    
-    
+        return self.conv(x)  
     
 class Contraction(nn.Module):
     def __init__(self, in_channels): 
@@ -74,8 +73,16 @@ class Contraction(nn.Module):
         self.feature_maps = []
         
     def feature_maps(self): 
-        
+
         return self.feature_maps
+    
+    def flattened_size(self): 
+        
+        return self.flattened_size
+    
+    def original_shape(self): 
+        
+        return self.original_shape
     
     def forward(self, input):
         
@@ -98,9 +105,11 @@ class Contraction(nn.Module):
         return encoder_input
 
 class Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, image_dimension):
         super(Encoder, self).__init__()
-        self.fc1 = nn.Linear(1048576, 512)
+        self.downsized_image_dimension = image_dimension / 16
+        self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 1024)
+        self.fc1 = nn.Linear(self.first_layer_size, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
         self.fc4 = nn.Linear(128, 64)
@@ -119,22 +128,24 @@ class Encoder(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, input_size, batch_size):
+    def __init__(self, input_size, batch_size, image_dimension):
         super(Decoder, self).__init__()
         self.batch_size = batch_size
+        self.downsized_image_dimension = int(image_dimension / 16)
+        self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 1024)
         self.fc1 = nn.Linear(input_size, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 256)
         self.fc4 = nn.Linear(256, 512)
-        self.fc5 = nn.Linear(512, 1048576)
-
+        self.fc5 = nn.Linear(512, self.output_layer_size) 
+        
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = torch.relu(self.fc2(x))
         x = torch.relu(self.fc3(x))
         x = torch.relu(self.fc4(x))
         x = self.fc5(x)
-        x = x.view(self.batch_size, 1024, 32, 32)
+        x = x.view(self.batch_size, 1024, self.downsized_image_dimension, self.downsized_image_dimension)
         return x
     
 class Expansion(nn.Module):
@@ -155,17 +166,17 @@ class Expansion(nn.Module):
         return logits
     
 class Modified_UNET(nn.Module): 
-    def __init__(self, batch_size=67, input_channels=3, output_channels=3, feature_vector_size=8):
+    def __init__(self, batch_size=67, input_channels=3, output_channels=3, feature_vector_size=8, image_dimension=128):
         super(Modified_UNET, self).__init__()
         self.contraction = Contraction(input_channels)
-        self.encoder = Encoder()
-        self.decoder = Decoder(feature_vector_size, batch_size)
+        self.encoder = Encoder(image_dimension)
+        self.decoder = Decoder(feature_vector_size, batch_size, image_dimension)
         self.expansion = Expansion(output_channels)
         
     def forward(self, input): 
         output = self.contraction(input)
         output = self.encoder(output)
-        output = self.decoder(output)
+        output = self.decoder(output)        
         feature_maps = self.contraction.feature_maps
         predicted_results = self.expansion(output, feature_maps)
         return predicted_results
