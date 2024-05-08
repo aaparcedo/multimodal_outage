@@ -12,6 +12,7 @@ import numpy as np
 image_dimension = 128
 batch_size = 4
 n_counties = 67
+n_timestep = 7 
 feature_vector_size = 8
 
 # Model Classes
@@ -78,11 +79,12 @@ class Contraction(nn.Module):
         self.feature_maps = [[] for _ in range(4)]
     
     def forward(self, input):
+        self.feature_maps = [[] for _ in range(4)]
         encoder_input = []
         
-        for batch in range(batch_size):
+        for county in range(n_counties):
         
-            x1 = self.inc(input[batch])      
+            x1 = self.inc(input[county])      
             self.feature_maps[0].append(x1)            
             
             x2 = self.down1(x1)             
@@ -101,11 +103,11 @@ class Contraction(nn.Module):
             self.feature_maps[feature_map] = torch.stack(self.feature_maps[feature_map])
               
         encoder_input = torch.stack(encoder_input)
-        encoder_input = encoder_input.view(batch_size, n_counties, -1)
+        encoder_input = encoder_input.view(n_counties, n_timestep, -1)
         
         return encoder_input
     
-class Encoder(nn.Module):
+class Encoder(nn.Module): 
     def __init__(self):
         super(Encoder, self).__init__()
         self.downsized_image_dimension = image_dimension / 16
@@ -121,8 +123,8 @@ class Encoder(nn.Module):
     def forward(self, input):
         wave_net_input = []
         
-        for batch in range(batch_size):
-            x = torch.relu(self.fc1(input[batch]))
+        for county in range(n_counties):
+            x = torch.relu(self.fc1(input[county]))
             x = torch.relu(self.fc2(x))
             x = torch.relu(self.fc3(x))
             x = torch.relu(self.fc4(x))
@@ -148,8 +150,8 @@ class Decoder(nn.Module):
     def forward(self, input):
         expansion_input = []
         
-        for batch in range(batch_size):
-            x = torch.relu(self.fc1(input[batch]))
+        for county in range(n_counties):
+            x = torch.relu(self.fc1(input[county]))
             x = torch.relu(self.fc2(x))
             x = torch.relu(self.fc3(x))
             x = torch.relu(self.fc4(x))
@@ -157,10 +159,10 @@ class Decoder(nn.Module):
             expansion_input.append(x)
             
         expansion_input = torch.stack(expansion_input)
-        expansion_input = expansion_input.view(batch_size, n_counties, 64, self.downsized_image_dimension, self.downsized_image_dimension)
+        expansion_input = expansion_input.view(n_counties, n_timestep, 64, self.downsized_image_dimension, self.downsized_image_dimension)
         return expansion_input
     
-class Expansion(nn.Module):
+class Expansion(nn.Module):  
     def __init__(self, output_channels): 
         super(Expansion, self).__init__()
         self.up1 = (Up(64, 32))
@@ -173,8 +175,8 @@ class Expansion(nn.Module):
         predictions = []
         feature_map_iteration = 0
         
-        for batch in range(batch_size):
-            x = self.up1(input[batch], feature_maps[-1][feature_map_iteration])
+        for county in range(n_counties):
+            x = self.up1(input[county], feature_maps[-1][feature_map_iteration])
             x = self.up2(x, feature_maps[-2][feature_map_iteration])
             x = self.up3(x, feature_maps[-3][feature_map_iteration])
             x = self.up4(x, feature_maps[-4][feature_map_iteration])
@@ -194,10 +196,17 @@ class Modified_UNET(nn.Module):
         self.decoder = Decoder()
         self.expansion = Expansion(output_channels)
         
-    def forward(self, input): 
-        output = self.contraction(input)        
-        output = self.encoder(output)
-        output = self.decoder(output)
-        feature_maps = self.contraction.feature_maps
-        predicted_results = self.expansion(output, feature_maps)
-        return predicted_results
+    def forward(self, input):
+        result = []  
+        
+        for batch in range(batch_size):
+                    
+            output = self.contraction(input[batch])            
+            output = self.encoder(output)
+            output = self.decoder(output)            
+            feature_maps = self.contraction.feature_maps
+            predicted_results = self.expansion(output, feature_maps)
+            result.append(predicted_results)
+            
+        result = torch.stack(result)
+        return result
