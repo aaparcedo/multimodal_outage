@@ -7,17 +7,6 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 
-image = Image.open('grayscale_image.jpeg')
-
-transform = transforms.Compose([
-    transforms.Grayscale(num_output_channels=3),
-    transforms.Resize((512, 512)),
-    transforms.ToTensor()])
-
-image = transform(image)
-image = image.unsqueeze(0)
-image = image.expand(5, -1, -1, -1)
-
 class DoubleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels):
@@ -180,9 +169,3 @@ class Modified_UNET(nn.Module):
         feature_maps = self.contraction.feature_maps
         predicted_results = self.expansion(output, feature_maps)
         return predicted_results
-    
-
-
-test = Modified_UNET(5)
-new_output = test(image)
-print(new_output.shape)
