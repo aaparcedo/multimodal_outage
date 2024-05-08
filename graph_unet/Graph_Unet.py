@@ -64,11 +64,11 @@ class OutConv(nn.Module):
 class Contraction(nn.Module):
     def __init__(self, in_channels): 
         super().__init__()
-        self.inc = (DoubleConv(in_channels, 64))
-        self.down1 = (Down(64, 128))
-        self.down2 = (Down(128, 256))
-        self.down3 = (Down(256, 512))
-        self.down4 = (Down(512, 1024))
+        self.inc = (DoubleConv(in_channels, 4))
+        self.down1 = (Down(4, 8))
+        self.down2 = (Down(8, 16))
+        self.down3 = (Down(16, 32))
+        self.down4 = (Down(32, 64))
         
         self.feature_maps = []
         
@@ -108,7 +108,7 @@ class Encoder(nn.Module):
     def __init__(self, image_dimension):
         super(Encoder, self).__init__()
         self.downsized_image_dimension = image_dimension / 16
-        self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 1024)
+        self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(self.first_layer_size, 512)
         self.fc2 = nn.Linear(512, 256)
         self.fc3 = nn.Linear(256, 128)
@@ -132,7 +132,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.batch_size = batch_size
         self.downsized_image_dimension = int(image_dimension / 16)
-        self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 1024)
+        self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(input_size, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 256)
@@ -145,17 +145,17 @@ class Decoder(nn.Module):
         x = torch.relu(self.fc3(x))
         x = torch.relu(self.fc4(x))
         x = self.fc5(x)
-        x = x.view(self.batch_size, 1024, self.downsized_image_dimension, self.downsized_image_dimension)
+        x = x.view(self.batch_size, 64, self.downsized_image_dimension, self.downsized_image_dimension)
         return x
     
 class Expansion(nn.Module):
     def __init__(self, output_channels): 
         super(Expansion, self).__init__()
-        self.up1 = (Up(1024, 512))
-        self.up2 = (Up(512, 256))
-        self.up3 = (Up(256, 128))
-        self.up4 = (Up(128, 64))
-        self.outc = (OutConv(64, output_channels))
+        self.up1 = (Up(64, 32))
+        self.up2 = (Up(32, 16))
+        self.up3 = (Up(16, 8))
+        self.up4 = (Up(8, 4))
+        self.outc = (OutConv(4, output_channels))
         
     def forward(self, input, feature_maps): 
         x = self.up1(input, feature_maps[-1])
