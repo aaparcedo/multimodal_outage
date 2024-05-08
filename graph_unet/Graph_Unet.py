@@ -7,6 +7,17 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 
+image = Image.open('grayscale_image.jpeg')
+
+transform = transforms.Compose([
+    transforms.Grayscale(num_output_channels=3),
+    transforms.Resize((512, 512)),
+    transforms.ToTensor()])
+
+image = transform(image)
+image = image.unsqueeze(0)
+image = image.expand(5, -1, -1, -1)
+
 class DoubleConv(nn.Module):
 
     def __init__(self, in_channels, out_channels):
@@ -119,8 +130,9 @@ class Encoder(nn.Module):
         return x
     
 class Decoder(nn.Module):
-    def __init__(self, input_size):
+    def __init__(self, input_size, batch_size):
         super(Decoder, self).__init__()
+        self.batch_size = batch_size
         self.fc1 = nn.Linear(input_size, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 256)
@@ -133,7 +145,7 @@ class Decoder(nn.Module):
         x = torch.relu(self.fc3(x))
         x = torch.relu(self.fc4(x))
         x = self.fc5(x)
-        x = x.view(2, 1024, 32, 32)
+        x = x.view(self.batch_size, 1024, 32, 32)
         return x
     
 class Expansion(nn.Module):
@@ -154,11 +166,11 @@ class Expansion(nn.Module):
         return logits
     
 class Modified_UNET(nn.Module): 
-    def __init__(self, input_channels, feature_vector_size, output_channels):
+    def __init__(self, batch_size=67, input_channels=3, output_channels=3, feature_vector_size=8):
         super(Modified_UNET, self).__init__()
         self.contraction = Contraction(input_channels)
         self.encoder = Encoder()
-        self.decoder = Decoder(feature_vector_size)
+        self.decoder = Decoder(feature_vector_size, batch_size)
         self.expansion = Expansion(output_channels)
         
     def forward(self, input): 
@@ -168,3 +180,9 @@ class Modified_UNET(nn.Module):
         feature_maps = self.contraction.feature_maps
         predicted_results = self.expansion(output, feature_maps)
         return predicted_results
+    
+
+
+test = Modified_UNET(5)
+new_output = test(image)
+print(new_output.shape)
