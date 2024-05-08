@@ -5,23 +5,22 @@ from PIL import Image
 import os
 
 
-class CustomDataset(Dataset):
+class BlackMarbleDataset(Dataset):
     def __init__(self, data_dir, transform=None):
         self.data_dir = data_dir
-        self.transform = transform
-        self.image_paths = os.listdir(data_dir)
-
+        self.county_paths = os.listdir(data_dir)
+             
     def __len__(self):
-        return len(self.image_paths)
+        return len(os.listdir(os.path.join(self.data_dir, 'orange')))
 
     def __getitem__(self, idx):
-        img_name = self.image_paths[idx]
-        img_path = os.path.join(self.data_dir, img_name)
-        # Open image and convert to RGB format
-        image = Image.open(img_path).convert('RGB')
-        # You can perform any additional preprocessing here if needed
+      day_list = [] # hold image for {idx} for all 67 counties     
 
-        if self.transform:
-            image = self.transform(image)
+      for county in self.county_paths:
+        county_path = os.path.join(self.data_dir, county)
+        image_paths = os.listdir(county_path)
+        image_path = os.path.join(county_path, image_paths[idx])  
+        image = Image.open(image_path).convert('RGB')
+        day_list.append(image)
 
-        return image
+      return day_list
