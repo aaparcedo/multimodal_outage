@@ -1,13 +1,14 @@
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 from PIL import Image
 import os
 
 
 class BlackMarbleDataset(Dataset):
-    def __init__(self, data_dir, transform=None):
+    def __init__(self, data_dir, start_index=7, transform=None):
         self.data_dir = data_dir
+        self.start_index = start_index
         self.county_paths = os.listdir(data_dir)
         self.transform = transform if transform is not None else transforms.ToTensor() 
    
@@ -19,32 +20,47 @@ class BlackMarbleDataset(Dataset):
         }
  
     def __len__(self):
-      return len(self.sorted_image_paths['orange']) - 6
+      return len(self.data_dir) - ( self.start_index * 2 )
     
-     
+    def __iter__(self):
+      return iter(range(self.start_index, len(self.data_dir)))
 
     def __getitem__(self, idx):
-        if idx < 6:
-            raise IndexError("Index too small. Must be at least 6 to retrieve a full week of data.")
 
-        week_image_list = []  # To hold images from {idx-6} to {idx} for all 67 counties
+      past_image_list = [] 
+      future_image_list = []
 
-        # Fetch images for the 7 days period
-        for day in range(idx - 6, idx + 1):             
-            day_image_list = []  # Hold images for one day from all counties
-            for county in self.county_paths:
-                county_path = os.path.join(self.data_dir, county)
-                image_path = os.path.join(county_path, self.sorted_image_paths[county][day])
+      # Fetch images for the start_index days period
+      for day in range(self.start_index):             
+        past_days_image_list = []  # Hold images for one day from all counties
+        future_days_image_list = []
 
-                if county == 'orange':
-                    print(f'item idx: {day}')
-                    print(image_path)
+        for county in self.county_paths:
+          county_path = os.path.join(self.data_dir, county)
+          past_image_path = os.path.join(county_path, self.sorted_image_paths[county][day])
+          future_image_path = os.path.join(county_path, self.sorted_image_paths[county][day + self.start_index])
+          
+          past_image = Image.open(past_image_path).convert('RGB')
+          future_image = Image.open(future_image_path).convert('RGB')
+          
+          if self.transform:
+            past_image = self.transform(past_image)
+            future_image = self.transform(future_image)
 
-                image = Image.open(image_path).convert('RGB')
-                if self.transform:
-                    image = self.transform(image)
-                day_image_list.append(image)
-            
-            week_image_list.append(torch.stack(day_image_list))  # Stack all county images for one day
+          past_days_image_list.append(past_image)
+          future_days_image_list.append(future_image)
 
-        return torch.stack(week_image_list)
+        past_image_list.append(torch.stack(past_days_image_list))  # Stack all county images for one day
+        future_image_list.append(torch.stack(future_days_image_list))
+      
+      past_image_tensor = torch.stack(past_image_list)
+      future_image_tensor = torch.stack(future_image_list)
+      
+      # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
+      # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
+      return (past_image_tensor, future_image_tensor)
+
+
+#dataset = BlackMarbleDataset(data_dir, start_index=7)
+
+#dataloader = DataLoader(dataset, batch_size=1)
