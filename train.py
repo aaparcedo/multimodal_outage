@@ -1,7 +1,7 @@
 import argparse
 import torch
 from torch import optim
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, random_split, SubsetRandomSampler
 from tqdm import tqdm
 from torchvision import transforms
 import os
@@ -27,6 +27,16 @@ def mse_per_pixel(x, y):
 
 def train_model(model, epochs, batch_size, device):
 
+
+  # define util.load_adj
+  #sensor_ids, sensor_id_to_ind, adj_mx = util.load_adj(args.adjdata,args.adjtype)
+  #supports = [torch.tensor(i).to(device) for i in adj_mx]
+
+  #if args.randomadj:
+  #  adjinit = None
+  #else:
+  #  adjinit = supports[0]
+
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -40,9 +50,13 @@ def train_model(model, epochs, batch_size, device):
   n_train = len(dataset) - n_val
   train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
 
+  indices = range(8, len(dataset))
+  sampler = SubsetRandomSampler(indices)
+
+
   # Create data loaders
-  loader_args = dict(batch_size=batch_size, num_workers=2, pin_memory=True)
-  train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+  loader_args = dict(batch_size=batch_size, num_workers=2, pin_memory=True, sampler=sampler)
+  train_loader = DataLoader(train_set, shuffle=False, **loader_args)
   val_loader = DataLoader(val_set, shuffle=False, **loader_args)
 
   # Set up optimizer and custom loss function
@@ -58,8 +72,9 @@ def train_model(model, epochs, batch_size, device):
    
       # item is a tensor of shape [67, 3, 128, 128]
       for item in train_loader:
-        images = item.to(device).squeeze(0)
-        
+        images = item.to(device).squeeze(0).permute(1, 0, 2, 3, 4)
+
+        exit() 
         # Apply transformations
         image_preds = model(images)
 
@@ -117,5 +132,5 @@ if __name__ == '__main__':
   model = Modified_UNET()
   model.to(device=device)
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(model=model, epochs=5, batch_size=1, device=device)
+  train_model(model=model, epochs=5, batch_size=4, device=device)
 
