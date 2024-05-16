@@ -7,8 +7,8 @@ from torchvision import transforms
 import os
 
 
-from graph_unet.dataset_loader import BlackMarbleDataset
-from graph_unet.Graph_Unet import Modified_UNET
+from utils import BlackMarbleDataset, load_adj
+from model  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
@@ -25,37 +25,43 @@ def mse_per_pixel(x, y):
     return total_mse
 
 
-def train_model(model, epochs, batch_size, device):
+def train_model(epochs, batch_size, device):
 
+  randomadj = True
+  adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+  adjtype = "doubletransition"
 
-  # define util.load_adj
-  #sensor_ids, sensor_id_to_ind, adj_mx = util.load_adj(args.adjdata,args.adjtype)
-  #supports = [torch.tensor(i).to(device) for i in adj_mx]
+  sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)  
+  #sensor_ids, sensor_id_to_ind, adj_mx = load_adj(args.adjdata,args.adjtype)
+  supports = [torch.tensor(i).to(device) for i in adj_mx]
 
   #if args.randomadj:
-  #  adjinit = None
-  #else:
-  #  adjinit = supports[0]
+  if randomadj:
+    adjinit = None
+  else:
+    adjinit = supports[0]
+
+  model = Modified_UNET(supports)
+  model.to(device=device)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
   ])
 
+  print(f'device: {device}')
+
   # Load dataset
-  dataset = BlackMarbleDataset(dir_image)
+  # TODO: make start_index a hyperparameter
+  dataset = BlackMarbleDataset(dir_image, start_index=7)
 
   # Split into train / validation partitions
   n_val = int(len(dataset) * 0.3)
   n_train = len(dataset) - n_val
   train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
 
-  indices = range(8, len(dataset))
-  sampler = SubsetRandomSampler(indices)
-
-
   # Create data loaders
-  loader_args = dict(batch_size=batch_size, num_workers=2, pin_memory=True, sampler=sampler)
+  loader_args = dict(batch_size=batch_size, num_workers=1, pin_memory=True)
   train_loader = DataLoader(train_set, shuffle=False, **loader_args)
   val_loader = DataLoader(val_set, shuffle=False, **loader_args)
 
@@ -72,45 +78,28 @@ def train_model(model, epochs, batch_size, device):
    
       # item is a tensor of shape [67, 3, 128, 128]
       for item in train_loader:
-        images = item.to(device).squeeze(0).permute(1, 0, 2, 3, 4)
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
 
-        exit() 
         # Apply transformations
-        image_preds = model(images)
+        preds_tensor = model(past_tensor)
 
         # pixel-wise MSE 
-        loss = criterion(image_preds, images)
+        loss = criterion(preds_tensor, future_tensor)
         
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
-        pbar.update(item.shape[0])    
+        pbar.update(past_tensor.shape[0])    
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
-     
+      
+      for item in val_loader: 
         # missing validation
         # missing logs
 
     torch.cuda.empty_cache()
-
-# forward pass should be something like:
-
-# unet (contract)
-# encoder
-
-# images.shape => [B, S, N, F, T] ~ [1, 4, 67, 9, 12] 
-# one batch, 4 days/samples per batch, 67 counties, 1 (eagle-i) + 8 (image embed), 12 timesteps in the past
-# image_embed_preds = gwn(images)
-
-# decoder shape: [1, 4, 67, 8, 12x8]
-# image_decoded = decoder(image_embed_preds)
-
-# unet expand shape: [1, 4, 67, 128x128, 12]
-# 4 images, 67 counties, 128x128 image size, 12 timesteps into the future
-# image_preds = unet_expand(image_decoded)
-
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
@@ -129,8 +118,6 @@ if __name__ == '__main__':
   #args = get_args()
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  model = Modified_UNET()
-  model.to(device=device)
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(model=model, epochs=5, batch_size=4, device=device)
+  train_model(epochs=5, batch_size=4, device=device)
 
