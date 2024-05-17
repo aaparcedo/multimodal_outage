@@ -18,7 +18,7 @@ import xarray as xr
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
 
-def find_available_dates(base_dir):
+def find_available_dates(base_dir=None, county_dir=None):
   """
   Itererate through all the the county subfolders and find shared dates.
   
@@ -29,26 +29,32 @@ def find_available_dates(base_dir):
   common_dates (list): pd.Timestamps of shared dates
   """
 
-  county_dirs = os.listdir(base_dir)
-
   # Initialize a set to hold the common dates/filenames across all county_dirs
   common_dates = None
- 
-  for county_idx, county_dir in enumerate(county_dirs):
-    days_avail = os.listdir(os.path.join(base_dir, county_dir))
-    dates_set = {day.split('.')[0] for day in days_avail}  # Set comprehension to extract dates
-
-    if common_dates is None:
-        common_dates = dates_set
-    else:
-        common_dates = common_dates.intersection(dates_set)
   
-  common_dates_list = list(common_dates)
+  if base_dir  == None:
+    already_preprocessed_days = os.listdir(county_dir)
+    day_list  = [pd.Timestamp(day.split('.')[0].replace('_', '-')) for day in already_preprocessed_days]
+    return day_list
 
-  # convert date(s) string to pd.Timestamp
-  common_dates = [pd.Timestamp(date.replace('_', '-')) for date in common_dates_list]
+  else:
+    county_dirs = os.listdir(base_dir) 
+    for county_idx, county_dir in enumerate(county_dirs):
 
-  return common_dates
+      county_dir_path = os.path.join(base_dir, county_dir)
+      days_avail = os.listdir(county_dir_path)
+      dates_set = {day.split('.')[0] for day in days_avail}  # Set comprehension to extract dates
+
+      if common_dates is None:
+          common_dates = dates_set
+      else:
+          common_dates = common_dates.intersection(dates_set)
+    
+    common_dates_list = list(common_dates)
+    # convert date(s) string to pd.Timestamp
+    common_dates = [pd.Timestamp(date.replace('_', '-')) for date in common_dates_list]
+
+    return common_dates
 
 
 def preprocess_raster_images():
@@ -76,13 +82,25 @@ def preprocess_raster_images():
   dates = find_available_dates(raw_dir) 
   dates.sort()
 
-  # TODO: get rid of this
-  # make a function that checks which images have already been processed and excludes them from the total dates list
-  dates = dates[-630:-450]
+
+  # do not process the first 90 days because there are no composites to compare to
+  dates = dates[180:]
+
+
+  print(dates[0])
+
+  dates_set = set(dates)
 
   for county in county_names:
+
     county_dir = os.path.join(raw_dir, county)
-    month_composites = load_month_composites(county)
+    month_composites = load_month_composites(county)   
+ 
+    # find that have already been processed
+    processed_dates = find_available_dates(county_dir=county_dir)
+    processed_dates_set = set(processed_dates)
+
+    dates_left_to_process = dates_set.symmetric_difference(processed_dates_set)
 
     # these two are for the save function
     save_file_path_ntl = os.path.join(ntl_dir, county)
@@ -90,10 +108,12 @@ def preprocess_raster_images():
     os.makedirs(save_file_path_ntl, exist_ok=True)
     os.makedirs(save_file_path_percent_normal, exist_ok=True)
 
-    for day_idx, day in enumerate(dates):
+    for day_idx, day in enumerate(dates_left_to_process):
+      if day < pd.Timestamp('2012-05-01'):
+        continue
+
       # day must be in str format, e.g., '2012_01_19'
       file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
-      
       with open(file_path, 'rb') as file:
         daily_image = pickle.load(file)
  
