@@ -56,14 +56,20 @@ def train_model(epochs, batch_size, device):
   dataset = BlackMarbleDataset(dir_image, start_index=7)
 
   # Split into train / validation partitions
-  n_val = int(len(dataset) * 0.3)
-  n_train = len(dataset) - n_val
-  train_set, val_set = random_split(dataset, [n_train, n_val], generator=torch.Generator().manual_seed(0))
+  n_test = int(len(dataset) * 0.2)
+  n_val = int(len(dataset) * 0.2)
+  n_train = len(dataset) - (n_val + n_test)
+  train_set, val_set, test_set = random_split(dataset, [n_train, n_val, n_test], generator=torch.Generator().manual_seed(0))
+
+  print(n_test)
+  print(n_val)
+  print(n_train)
 
   # Create data loaders
   loader_args = dict(batch_size=batch_size, num_workers=1, pin_memory=True)
-  train_loader = DataLoader(train_set, shuffle=False, **loader_args)
-  val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+  train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+  val_loader = DataLoader(val_set, shuffle=True, **loader_args)
+  test_loader = DataLoader(test_set, shuffle=True, **loader_args)
 
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -73,7 +79,7 @@ def train_model(epochs, batch_size, device):
   for epoch in range(epochs):
     model.train()
     epoch_loss = 0
-
+    
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
    
       # item is a tensor of shape [67, 3, 128, 128]
@@ -95,11 +101,40 @@ def train_model(epochs, batch_size, device):
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
       
-      for item in val_loader: 
-        # missing validation
-        # missing logs
 
-    torch.cuda.empty_cache()
+    model.eval()
+    val_loss = 0
+    
+    with torch.no_grad():
+      for item in val_loader:
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+
+        # Apply transformations
+        preds_tensor = model(past_tensor)
+
+        # Pixel-wise MSE
+        loss = criterion(preds_tensor, future_tensor)
+        val_loss += loss.item()
+
+    avg_train_loss = epoch_loss / len(train_loader)
+    avg_val_loss = val_loss / len(val_loader)
+
+    print(f'Epoch {epoch + 1}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
+
+
+  model.eval()
+  test_loss = 0
+
+  with torch.no_grad():
+    for item in test_loader:
+      past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+      preds_tensor = model(past_tensor)
+      loss = criterion(preds_tensor, future_tensor)
+      test_loss += loss.item()
+
+  avg_test_loss = test_loss / len(test_loader)
+  print(f'Test Loss: {avg_test_loss:.4f}')
+
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
@@ -119,5 +154,5 @@ if __name__ == '__main__':
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(epochs=5, batch_size=4, device=device)
+  train_model(epochs=10, batch_size=4, device=device)
 
