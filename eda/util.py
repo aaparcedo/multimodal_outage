@@ -18,54 +18,6 @@ import xarray as xr
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
 
-def preprocess_image(file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal):
-    with open(file_path, 'rb') as file:
-        daily_image = pickle.load(file)
-
-    percent_normal_image = calculate_percent_of_normal_of_day(daily_image, month_composites)
-
-    save_satellite_image_square(daily_image, save_file_path_ntl)
-    save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
-
-#def preprocess_raster_images():
-#    start_time = time.time()  # Record start time
-    #county_names = get_county_names_from_state_gdf()
-
-#    county_names = ["sarasota", "manatee", "collier"]
-
- #   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
-  #  raw_dir = os.path.join(base_dir, 'original')
-
-   # ntl_dir = os.path.join(base_dir, 'ntl')
-    #percent_normal_dir = os.path.join(base_dir, 'percent_normal')
-
-   # dates = find_available_dates(raw_dir)
-   # dates = random.sample(dates, 100)
-
-  #  with concurrent.futures.ThreadPoolExecutor() as executor:
-   #     futures = []
-    #    for county in county_names:
-     #       county_dir = os.path.join(raw_dir, county)
-      #      month_composites = load_month_composites(county)
-#            save_file_path_ntl = os.path.join(ntl_dir, county)
- #           save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
-  #          os.makedirs(save_file_path_ntl, exist_ok=True)
-   #         os.makedirs(save_file_path_percent_normal, exist_ok=True)
-    #        for day in dates:
-     #           file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
-      #          future = executor.submit(preprocess_image, file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal)
-       #         futures.append(future)
-        #    concurrent.futures.wait(futures)
-         #   print(f"finished processing for {county}")
- 
-       # Wait for all tasks to complete
-       # concurrent.futures.wait(futures)
-
-   # end_time = time.time()  # Record end time
-   # execution_time = end_time - start_time
-   # print(f"Script execution time: {execution_time} seconds")
-
-
 def find_available_dates(base_dir):
   """
   Itererate through all the the county subfolders and find shared dates.
@@ -90,7 +42,7 @@ def find_available_dates(base_dir):
         common_dates = dates_set
     else:
         common_dates = common_dates.intersection(dates_set)
-    
+  
   common_dates_list = list(common_dates)
 
   # convert date(s) string to pd.Timestamp
@@ -98,13 +50,22 @@ def find_available_dates(base_dir):
 
   return common_dates
 
+
 def preprocess_raster_images():
+  """
+  Process all xarray/pickle/raw satellite images into RGB image (JPG).
+
+  Parameters:
+  - N/A
+
+  Returns:
+  - N/A
+  """
+
 
   start_time = time.time()  # Record start time
 
   county_names = get_county_names_from_state_gdf()
-  county_names = county_names[8:]
-  print(county_names)
 
   #county_names = ["manatee"]
   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
@@ -113,9 +74,11 @@ def preprocess_raster_images():
   percent_normal_dir = os.path.join(base_dir, 'percent_normal') 
  
   dates = find_available_dates(raw_dir) 
-  # sample
-  #dates = random.sample(dates, 100)
-  dates = dates[-100:]
+  dates.sort()
+
+  # TODO: get rid of this
+  # make a function that checks which images have already been processed and excludes them from the total dates list
+  dates = dates[-630:-450]
 
   for county in county_names:
     county_dir = os.path.join(raw_dir, county)
@@ -500,12 +463,6 @@ def get_dims_for_all_counties():
   return counties_dims
 
 
-# deprecated check blackmarblepy documentation
-def count_light_pixels(ntl_array):
-  non_zero_non_nan_count = np.sum(np.logical_and(ntl_array != 0, ~np.isnan(ntl_array)))
-  return non_zero_non_nan_count
-
-
 # Calculate the mean radiance per day using the daily raster images
 def calculate_daily_percent_normal_mean_radiance(raster_dataset, annual_non_zero_non_nan_count, annual_composite, filter_cloudy_days=True):
     """
@@ -573,60 +530,6 @@ def calculate_mean_annual_radiance_with_relevant_pixels(annual_composite, releva
 
   return relevant_mean_annual_radiance
 
-
-
-
-#These functions are outdated. 
-#TODO: Check BlackMarblePy documention and see how they find nonzero, zero, or nan pixels
-
-# Calculate the number of light pixels per day using the daily raster images
-def calculate_daily_num_light_pixels(raster_dataset):
-  
-  daily_num_light_pixels_dict = {}
-
-  # loop thru each day
-  for i in range(len(raster_dataset['time'])):
-    time_index = np.datetime_as_string(raster_dataset['time'][i].values.astype('datetime64[D]'))
-    daily_ntl = raster_dataset["Gap_Filled_DNB_BRDF-Corrected_NTL"][i].values
-    num_light_pixels = count_light_pixels(daily_ntl)
-
-    daily_num_light_pixels_dict[time_index] = num_light_pixels
-  
-  return daily_num_light_pixels_dict
-
-
-# Calculate the number of zero pixels per day using the daily raster images  
-def calculate_daily_num_zero_pixels(raster_dataset):
-  
-  daily_num_zero_pixels_dict = {}
-
-  # loop thru each day
-  for i in range(len(raster_dataset['time'])):
-    time_index = np.datetime_as_string(raster_dataset['time'][i].values.astype('datetime64[D]'))
-    daily_ntl = raster_dataset["Gap_Filled_DNB_BRDF-Corrected_NTL"][i].values 
-
-    zero_pixel_count = np.sum(daily_ntl == 0)
-  
-    daily_num_zero_pixels_dict[time_index] = zero_pixel_count
-
-  return daily_num_zero_pixels_dict
-
-
-# Calculate the number of nan pixels per day using the daily raster images 
-def calculate_daily_num_nan_pixels(raster_dataset):
-  
-  daily_num_nan_pixels_dict = {}
-    
-  for i in range(len(raster_dataset['time'])):
-    time_index = np.datetime_as_string(raster_dataset['time'][i].values.astype('datetime64[D]'))
-    daily_ntl = raster_dataset["Gap_Filled_DNB_BRDF-Corrected_NTL"][i].values
-    nan_pixel_count = np.sum(np.isnan(daily_ntl))
-    
-    daily_num_nan_pixels_dict[time_index] = nan_pixel_count
-
-  return daily_num_nan_pixels_dict
-
-# above 3 functions are outdates
 
 
 def plot_daily_radiance(radiance_array, labels):
