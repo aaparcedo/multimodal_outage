@@ -1,6 +1,7 @@
 __pycache__/
 Graph-WaveNet/
-/figures/
+*/figures/
 find_normalization.py
 preprocess.py
 */download_logs/
+eda/download_broward.py
