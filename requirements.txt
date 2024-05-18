@@ -1,0 +1,16 @@
+blackmarblepy==0.2.2
+cartopy==0.22.0
+colorcet==3.0.1
+contextily==1.5.0
+gdal==3.6.2
+geopandas==0.10.0
+geopy==2.4.1
+geos==3.8.0
+geotiff==1.7.0
+hdf5==1.12.1
+torchaudio==2.2.0.dev20240507
+torch==2.3.0
+torchvision==0.18.0 
+tqdm==4.65.2
+triton==2.3.0
+torchtriton==3.0.0+45fff310c8
