@@ -13,17 +13,27 @@ from model  import Modified_UNET
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
 def mse_per_pixel(x, y):
-    # Calculate squared difference
-    squared_diff = (x - y) ** 2
-    
-    # Compute mean across all dimensions except for the batch dimension
-    # This averages the MSE across all pixels in each image in the batch
-    mse_per_image = torch.mean(squared_diff, dim=[1, 2, 3])
-    
-    # Finally, compute the average across all images in the batch
-    total_mse = torch.mean(mse_per_image)
-    return total_mse
-
+  squared_diff = (x - y) ** 2
+  total_mse = torch.mean(squared_diff)
+  return total_mse
+  
+def rmse_per_pixel(x, y): 
+  squared_diff = (x - y) ** 2
+  total_rmse = torch.sqrt(torch.mean(squared_diff))
+  return total_rmse
+  
+def mae_per_pixel(x, y): 
+  error = x - y
+  absolute_error = torch.abs(error)
+  total_mae = torch.mean(absolute_error)
+  return total_mae
+  
+def mape_per_pixel(x, y): 
+  error = (x - y) / x
+  absolute_error = torch.abs(error)
+  mean_absolute_error = torch.mean(absolute_error)
+  total_mape = 100 * mean_absolute_error
+  return total_mape
 
 def train_model(epochs, batch_size, device):
 
