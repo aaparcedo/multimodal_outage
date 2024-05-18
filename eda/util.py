@@ -80,6 +80,13 @@ def preprocess_raster_images():
   dates = find_available_dates(raw_dir) 
   dates.sort()
 
+<<<<<<< Updated upstream
+=======
+
+  # do not process the first 90 days because there are no composites to compare to
+  dates = dates[180:]
+
+>>>>>>> Stashed changes
   dates_set = set(dates)
 
   for county in county_names:
@@ -92,6 +99,10 @@ def preprocess_raster_images():
     processed_dates_set = set(processed_dates)
 
     dates_left_to_process = dates_set.symmetric_difference(processed_dates_set)
+
+    print(dates_left_to_process)
+    if len(dates) == 0:
+      continue
 
     # these two are for the save function
     save_file_path_ntl = os.path.join(ntl_dir, county)
