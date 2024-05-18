@@ -84,8 +84,13 @@ def train_model(epochs, batch_size, device):
    
       # item is a tensor of shape [67, 3, 128, 128]
       for item in train_loader:
+<<<<<<< Updated upstream
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
 
+=======
+        images = item.to(device).half().squeeze(0)
+        print_memory_usage()
+>>>>>>> Stashed changes
         # Apply transformations
         preds_tensor = model(past_tensor)
 
@@ -153,6 +158,12 @@ if __name__ == '__main__':
   #args = get_args()
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+<<<<<<< Updated upstream
+=======
+  model = Modified_UNET()
+  model.to(device=device).half()
+
+>>>>>>> Stashed changes
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
   train_model(epochs=10, batch_size=4, device=device)
 
