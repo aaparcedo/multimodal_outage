@@ -18,65 +18,12 @@ import xarray as xr
 bearer="eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
 
-<<<<<<< Updated upstream
-def find_available_dates(base_dir=None, county_dir=None):
-=======
-def preprocess_image(file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal):
-    with open(file_path, 'rb') as file:
-        daily_image = pickle.load(file)
-
-    percent_normal_image = calculate_percent_of_normal_of_day(daily_image, month_composites)
-
-    save_satellite_image_square(daily_image, save_file_path_ntl)
-    save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
-
-#def preprocess_raster_images():
-#    start_time = time.time()  # Record start time
-    #county_names = get_county_names_from_state_gdf()
-
-#    county_names = ["sarasota", "manatee", "collier"]
-
- #   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
-  #  raw_dir = os.path.join(base_dir, 'original')
-
-   # ntl_dir = os.path.join(base_dir, 'ntl')
-    #percent_normal_dir = os.path.join(base_dir, 'percent_normal')
-
-   # dates = find_available_dates(raw_dir)
-   # dates = random.sample(dates, 100)
-
-  #  with concurrent.futures.ThreadPoolExecutor() as executor:
-   #     futures = []
-    #    for county in county_names:
-     #       county_dir = os.path.join(raw_dir, county)
-      #      month_composites = load_month_composites(county)
-#            save_file_path_ntl = os.path.join(ntl_dir, county)
- #           save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
-  #          os.makedirs(save_file_path_ntl, exist_ok=True)
-   #         os.makedirs(save_file_path_percent_normal, exist_ok=True)
-    #        for day in dates:
-     #           file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
-      #          future = executor.submit(preprocess_image, file_path, month_composites, save_file_path_ntl, save_file_path_percent_normal)
-       #         futures.append(future)
-        #    concurrent.futures.wait(futures)
-         #   print(f"finished processing for {county}")
- 
-       # Wait for all tasks to complete
-       # concurrent.futures.wait(futures)
-
-   # end_time = time.time()  # Record end time
-   # execution_time = end_time - start_time
-   # print(f"Script execution time: {execution_time} seconds")
-
-
 def find_available_dates(base_dir):
->>>>>>> Stashed changes
   """
   Itererate through all the the county subfolders and find shared dates.
   
   Parameters:
   - base_dir (str): directory of interest
-<<<<<<< Updated upstream
 
   Returns:
   common_dates (list): pd.Timestamps of shared dates
@@ -109,39 +56,11 @@ def find_available_dates(base_dir):
 
     return common_dates
 
-=======
-
-  Returns:
-  common_dates (list): pd.Timestamps of shared dates
-  """
-
-  county_dirs = os.listdir(base_dir)
-
-  # Initialize a set to hold the common dates/filenames across all county_dirs
-  common_dates = None
- 
-  for county_idx, county_dir in enumerate(county_dirs):
-    days_avail = os.listdir(os.path.join(base_dir, county_dir))
-    dates_set = {day.split('.')[0] for day in days_avail}  # Set comprehension to extract dates
-
-    if common_dates is None:
-        common_dates = dates_set
-    else:
-        common_dates = common_dates.intersection(dates_set)
-    
-  common_dates_list = list(common_dates)
-
-  # convert date(s) string to pd.Timestamp
-  common_dates = [pd.Timestamp(date.replace('_', '-')) for date in common_dates_list]
-
-  return common_dates
->>>>>>> Stashed changes
 
 def preprocess_raster_images():
   """
   Process all xarray/pickle/raw satellite images into RGB image (JPG).
 
-<<<<<<< Updated upstream
   Parameters:
   - N/A
 
@@ -149,35 +68,17 @@ def preprocess_raster_images():
   - N/A
   """
 
-
   start_time = time.time()  # Record start time
 
   county_names = get_county_names_from_state_gdf()
 
-=======
-  start_time = time.time()  # Record start time
-
-  county_names = get_county_names_from_state_gdf()
-  county_names = county_names[8:]
-  print(county_names)
-
->>>>>>> Stashed changes
-  #county_names = ["manatee"]
   base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
   raw_dir = os.path.join(base_dir, 'original')
   ntl_dir = os.path.join(base_dir, 'ntl')
   percent_normal_dir = os.path.join(base_dir, 'percent_normal') 
  
   dates = find_available_dates(raw_dir) 
-<<<<<<< Updated upstream
   dates.sort()
-
-
-  # do not process the first 90 days because there are no composites to compare to
-  dates = dates[180:]
-
-
-  print(dates[0])
 
   dates_set = set(dates)
 
@@ -191,38 +92,20 @@ def preprocess_raster_images():
     processed_dates_set = set(processed_dates)
 
     dates_left_to_process = dates_set.symmetric_difference(processed_dates_set)
-=======
-  # sample
-  #dates = random.sample(dates, 100)
-  dates = dates[-100:]
-
-  for county in county_names:
-    county_dir = os.path.join(raw_dir, county)
-    month_composites = load_month_composites(county)
->>>>>>> Stashed changes
 
     # these two are for the save function
     save_file_path_ntl = os.path.join(ntl_dir, county)
     save_file_path_percent_normal = os.path.join(percent_normal_dir, county)
     os.makedirs(save_file_path_ntl, exist_ok=True)
     os.makedirs(save_file_path_percent_normal, exist_ok=True)
-<<<<<<< Updated upstream
 
     for day_idx, day in enumerate(dates_left_to_process):
       print(f"current day {day}")
       if day < pd.Timestamp('2012-05-01'):
         print(f"invali day {day}")
         continue
-=======
->>>>>>> Stashed changes
 
-    for day_idx, day in enumerate(dates):
-      # day must be in str format, e.g., '2012_01_19'
       file_path = os.path.join(county_dir, f'{day.strftime("%Y_%m_%d")}.pickle')
-<<<<<<< Updated upstream
-=======
-      
->>>>>>> Stashed changes
       with open(file_path, 'rb') as file:
         daily_image = pickle.load(file)
  
@@ -231,10 +114,6 @@ def preprocess_raster_images():
       # send to be resized to a specified tbd size and saved to special folder
       save_satellite_image_square(daily_image, save_file_path_ntl) 
       save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
-<<<<<<< Updated upstream
-      print("-----------------")
-=======
->>>>>>> Stashed changes
     
   end_time = time.time()  # Record end time
   execution_time = end_time - start_time
@@ -454,8 +333,25 @@ def download_county_raster(county, quality_flag, freq, start_date, end_date=None
   else:
     print("Pick a valid time frequency, i.e., 'D' or 'M'")
 
-  raster = bm_raster(county_gdf, product_id=product_id, date_range=dates, bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
-  
+  download_log_folder_path = "/home/aaparcedo/multimodal_outage/eda/download_logs"
+  download_log_file_path = os.path.join(download_log_folder_path, f"{county}_error_log.txt")
+  raster_file_path = os.path.join("/groups/mli/multimodal_outage/data/black_marble/hq/original/{county}")
+
+  with open(download_log_file_path, 'a') as f:
+    for date in dates:
+      try:
+        raster = bm_raster(county_gdf, product_id=product_id, date_range=date, bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
+        
+        day = str(raster.coords['time'])[-10:].replace('-', '_')
+        print(f'current day: {day}')
+        pickle_path = os.path.join(raster_file_path, f"{day}.pickle")
+        with open(pickle_path, 'wb') as pickled_raster:
+          pickle.dump(raster, pickled_raster)
+        print(f'Successfully downloaded data for {county} on {day}')
+      except Exception as e:
+        f.write(f'{day}\n')
+        print(f'Error downloading data for {day}.')
+
   return raster 
 
 
@@ -478,15 +374,9 @@ def download_missing_dates(dataset_county_path):
   available_data_file_names_formatted = pd.to_datetime([file_name.replace('_', '-').replace('.pickle', '') for file_name in available_data_file_names])
  
   inverse_dates = required_dates[~required_dates.isin(available_data_file_names_formatted)]
-<<<<<<< Updated upstream
 
   return inverse_dates
 
-=======
-
-  return inverse_dates
-
->>>>>>> Stashed changes
 
 def big_download_fl_county_raster():
   """
@@ -500,12 +390,7 @@ def big_download_fl_county_raster():
   base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'  
   flag_dataset_path = os.path.join(base_dataset_path, "hq/original") # hq because quality_flag_rm=[2, 255]
 
-<<<<<<< Updated upstream
-  county_names = ["glades", "gulf", "hamilton", "hendry", "hernando", "hillsborough"]
-=======
-  county_names = [ "collier", "columbia", "desoto", "dixie", "duval"]
-  #county_names = ["glades", "gulf", "hamilton", "hendry", "hernando", "hillsborough"]
->>>>>>> Stashed changes
+  county_names = ["gulf", "hamilton", "hendry", "hernando", "hillsborough"]
   exception_list = []
 
   for county in county_names:
@@ -513,7 +398,10 @@ def big_download_fl_county_raster():
 
     gdf = get_gdf(county)
     missing_dates = download_missing_dates(flag_county_dataset_path)
-      
+     
+    print(f'first day: {missing_dates[0]}')
+    print(f'last day: {missing_dates[-1]}')
+ 
     try:
       daily_dataset = bm_raster(gdf, product_id="VNP46A2", date_range=missing_dates, bearer=bearer, variable="DNB_BRDF-Corrected_NTL", quality_flag_rm=[2, 255]) 
     except Exception as e:
