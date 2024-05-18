@@ -109,7 +109,9 @@ def preprocess_raster_images():
     os.makedirs(save_file_path_percent_normal, exist_ok=True)
 
     for day_idx, day in enumerate(dates_left_to_process):
+      print(f"current day {day}")
       if day < pd.Timestamp('2012-05-01'):
+        print(f"invali day {day}")
         continue
 
       # day must be in str format, e.g., '2012_01_19'
@@ -122,6 +124,7 @@ def preprocess_raster_images():
       # send to be resized to a specified tbd size and saved to special folder
       save_satellite_image_square(daily_image, save_file_path_ntl) 
       save_satellite_image_square(percent_normal_image, save_file_path_percent_normal)
+      print("-----------------")
     
   end_time = time.time()  # Record end time
   execution_time = end_time - start_time
@@ -205,7 +208,7 @@ def calculate_average_month_ntl(daily_image, month_composites):
 
   # get dates of previous 3 months
   filtered_dates =  pd.date_range(start=day - pd.DateOffset(months=4), end=day - pd.DateOffset(months=1), freq='MS')
-
+  print(f"dates of previous three months: {filtered_dates}")
   monthly_ntl = []
   for month in filtered_dates:
     month_ntl = np.array(month_composites["NearNadir_Composite_Snow_Free"].sel(time=month))
@@ -607,7 +610,7 @@ def save_daily_raster_image(raster_image, save_path):
   )
 
   ax.axis('off')
-
+  print(f"save path: {savepath}")
   plt.savefig(save_path, dpi=300)
   plt.close(fig)
 
