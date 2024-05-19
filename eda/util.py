@@ -88,8 +88,6 @@ def preprocess_raster_images():
         date for date in total_common_dates if date.year == 2022]
     total_common_dates.sort()
 
-    # do not process the first 90 days because there are no composites to compare to
-
     # ucomment this when processing all years
     # total_common_dates = total_common_dates[120:]
 
@@ -126,8 +124,7 @@ def preprocess_raster_images():
             # dates_left_to_process = total_common_dates_set.symmetric_difference(
             #     processed_dates_set)
             print("num dates left to process", len(dates_left_to_process))
-            f.write(f"num dates left to process {
-                    len(dates_left_to_process)}\n\n")
+            f.write(f"num dates left to process {len(dates_left_to_process)}\n\n")
 
         # these two are for the save function
         save_file_path_ntl = os.path.join(ntl_dir, county)
@@ -364,38 +361,55 @@ def get_gdf(county_name):
     return county_gdf
 
 
-def download_county_raster(county, quality_flag, freq, start_date, end_date=None):
-    """
-    Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
+def download_county_raster(county, quality_flag, freq, dates=None, start_date=None, end_date=None):
+  """
+  Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
 
-    Parameters:
-    - county (str): name of the county
-    - start_date (Timestamp) :
-    - end_date (Timestamp) :
-    - quality_flag (list): desired quality flag, e.g., [2, 255]
-    - freq (str): frequency of image (options 'D' or 'MS')
+  Parameters:
+  - county (str): name of the county
+  - start_date (Timestamp) :
+  - end_date (Timestamp) :
+  - quality_flag (list): desired quality flag, e.g., [2, 255]
+  - freq (str): frequency of image (options 'D' or 'MS')
 
-    Returns:
-    raster (xarray): object of satellite image
-    """
+  Returns:
+  raster (xarray): object of satellite image
+  """  
 
-    county_gdf = get_gdf(county)
-    dates = pd.date_range(
-        start_date, end_date if end_date else start_date, freq=freq)
+  county_gdf = get_gdf(county)
 
-    if freq == 'D':
-        product_id = "VNP46A2"
-        variable = "DNB_BRDF-Corrected_NTL"
-    elif freq == 'MS':
-        product_id = "VNP46A3"
-        variable = "NearNadir_Composite_Snow_Free"
-    else:
-        print("Pick a valid time frequency, i.e., 'D' or 'M'")
+  if dates is None:
+    dates = pd.date_range(start_date, end_date if end_date else start_date, freq=freq)  
 
-    raster = bm_raster(county_gdf, product_id=product_id, date_range=dates,
-                       bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
+  if freq == 'D':
+    product_id = "VNP46A2"
+    variable = "DNB_BRDF-Corrected_NTL"
+  elif freq == 'MS':
+    product_id = "VNP46A3"
+    variable = "NearNadir_Composite_Snow_Free"
+  else:
+    print("Pick a valid time frequency, i.e., 'D' or 'M'")
 
-    return raster
+  download_log_folder_path = "/home/aaparcedo/multimodal_outage/eda/download_logs"
+  download_log_file_path = os.path.join(download_log_folder_path, f"{county}_error_log.txt")
+  raster_file_path = os.path.join("/groups/mli/multimodal_outage/data/black_marble/hq/original/{county}")
+
+  with open(download_log_file_path, 'a') as f:
+    for date in dates:
+      print(f'trying date {date}')
+      try:
+        raster = bm_raster(county_gdf, product_id=product_id, date_range=date, bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
+        
+        day = str(raster.coords['time'])[-10:].replace('-', '_')
+        pickle_path = os.path.join(raster_file_path, f"{day}.pickle")
+        with open(pickle_path, 'wb') as pickled_raster:
+          pickle.dump(raster, pickled_raster)
+        f.write(f'Successfully downloaded data for {county} on {day}')
+        print(f'Successfully downloaded data for {county} on {day}')
+      except Exception as e:
+        f.write(f'Error downloading data for {date}.')
+        print(f'Error downloading data for {date}.')
+  return raster 
 
 
 def download_missing_dates(dataset_county_path):
