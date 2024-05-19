@@ -81,6 +81,12 @@ def train_model(epochs, batch_size, device):
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
   criterion = mse_per_pixel
+  
+  # Alternative Benchmarks
+  train_rmse = 0
+  train_mape = 0
+  rmse = rmse_per_pixel
+  mape = mape_per_pixel
 
   # Begin training
   for epoch in range(epochs):
@@ -98,6 +104,12 @@ def train_model(epochs, batch_size, device):
 
         # pixel-wise MSE 
         loss = criterion(preds_tensor, future_tensor)
+        
+        # pixel-wise RMSE
+        train_rmse += rmse(preds_tensor, future_tensor)
+        
+        #pixel-wise MAPE
+        train_mape += mape(preds_tensor, future_tensor)
         
         optimizer.zero_grad()
         loss.backward()
@@ -125,9 +137,15 @@ def train_model(epochs, batch_size, device):
 
     avg_train_loss = epoch_loss / len(train_loader)
     avg_val_loss = val_loss / len(val_loader)
+    
+    avg_rmse_loss = train_rmse / len(train_loader)
+    avg_mape_loss = train_mape / len(train_loader)
 
-    print(f'Epoch {epoch + 1}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
-
+    print(f'Epoch {epoch + 1}, 
+          Training Loss (MSE): {avg_train_loss:.4f}, 
+          RMSE Loss: {avg_rmse_loss:.4f}, 
+          MAPE Loss: {avg_mape_loss:.4f},
+          Validation Loss: {avg_val_loss:.4f}')
 
   model.eval()
   test_loss = 0
