@@ -5,8 +5,8 @@ from torch.utils.data import DataLoader, random_split, SubsetRandomSampler
 from tqdm import tqdm
 from torchvision import transforms
 import os
-
-from utils import BlackMarbleDataset, load_adj
+import torch.nn as nn
+from utils import BlackMarbleDataset, load_adj, print_memory_usage, plot_training_history
 from model  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
@@ -53,7 +53,8 @@ def train_model(epochs, batch_size, device):
     adjinit = supports[0]
 
   model = Modified_UNET(supports)
-  model.to(device=device)
+
+  model = nn.DataParallel(model).to(device=device)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -87,6 +88,11 @@ def train_model(epochs, batch_size, device):
   rmse = rmse_per_pixel
   mape = mape_per_pixel
 
+  train_loss_hist = []
+  val_loss_hist = []
+  rmse_hist = []
+  mape_hist = []
+  
   # Begin training
   for epoch in range(epochs):
     model.train()
@@ -120,7 +126,7 @@ def train_model(epochs, batch_size, device):
         pbar.update(past_tensor.shape[0])    
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
-      
+        print_memory_usage() 
 
     model.eval()
     val_loss = 0
@@ -142,11 +148,24 @@ def train_model(epochs, batch_size, device):
     avg_rmse_loss = train_rmse / len(train_loader)
     avg_mape_loss = train_mape / len(train_loader)
 
+    print(f'type of avg_train_loss {type(avg_train_loss)}')
+    print(f'type of avg_val_loss: {type(avg_val_loss)}')
+    print(f'type of avg_rmse_loss: {type(avg_rmse_loss)}')
+    print(f'type of avg_mape_loss: {type(avg_mape_loss)}')
+
+    train_loss_hist.append(avg_train_loss)
+    val_loss_hist.append(avg_val_loss)
+    rmse_hist.append(avg_rmse_loss.cpu().detach().numpy())
+    mape_hist.append(avg_mape_loss.cpu().detach().numpy())
+
     print(f'Epoch {epoch + 1}, \
           Training Loss (MSE): {avg_train_loss:.4f}, \
           RMSE Loss: {avg_rmse_loss:.4f}, \
           MAPE Loss: {avg_mape_loss:.4f}, \
           Validation Loss: {avg_val_loss:.4f}')
+
+  save_path = 'training_history_plot.png' 
+  plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path)
 
   model.eval()
   test_loss = 0
@@ -180,5 +199,5 @@ if __name__ == '__main__':
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(epochs=10, batch_size=4, device=device)
+  train_model(epochs=2, batch_size=4, device=device)
 
