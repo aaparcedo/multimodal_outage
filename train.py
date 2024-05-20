@@ -6,7 +6,6 @@ from tqdm import tqdm
 from torchvision import transforms
 import os
 
-
 from utils import BlackMarbleDataset, load_adj
 from model  import Modified_UNET
 
@@ -28,7 +27,9 @@ def mae_per_pixel(x, y):
   total_mae = torch.mean(absolute_error)
   return total_mae
   
-def mape_per_pixel(x, y): 
+def mape_per_pixel(x, y, epsilon=1e-8): 
+  if x == 0: 
+    x += epsilon
   error = (x - y) / x
   absolute_error = torch.abs(error)
   mean_absolute_error = torch.mean(absolute_error)
@@ -83,8 +84,6 @@ def train_model(epochs, batch_size, device):
   criterion = mse_per_pixel
   
   # Alternative Benchmarks
-  train_rmse = 0
-  train_mape = 0
   rmse = rmse_per_pixel
   mape = mape_per_pixel
 
@@ -92,6 +91,8 @@ def train_model(epochs, batch_size, device):
   for epoch in range(epochs):
     model.train()
     epoch_loss = 0
+    train_rmse = 0
+    train_mape = 0
     
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
    
