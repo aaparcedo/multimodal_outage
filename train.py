@@ -5,25 +5,36 @@ from torch.utils.data import DataLoader, random_split, SubsetRandomSampler
 from tqdm import tqdm
 from torchvision import transforms
 import os
-
-
-from utils import BlackMarbleDataset, load_adj
+import torch.nn as nn
+from utils import BlackMarbleDataset, load_adj, print_memory_usage, plot_training_history
 from model  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
 def mse_per_pixel(x, y):
-    # Calculate squared difference
-    squared_diff = (x - y) ** 2
-    
-    # Compute mean across all dimensions except for the batch dimension
-    # This averages the MSE across all pixels in each image in the batch
-    mse_per_image = torch.mean(squared_diff, dim=[1, 2, 3])
-    
-    # Finally, compute the average across all images in the batch
-    total_mse = torch.mean(mse_per_image)
-    return total_mse
-
+  squared_diff = (x - y) ** 2
+  total_mse = torch.mean(squared_diff)
+  return total_mse
+  
+def rmse_per_pixel(x, y): 
+  squared_diff = (x - y) ** 2
+  total_rmse = torch.sqrt(torch.mean(squared_diff))
+  return total_rmse
+  
+def mae_per_pixel(x, y): 
+  error = x - y
+  absolute_error = torch.abs(error)
+  total_mae = torch.mean(absolute_error)
+  return total_mae
+  
+def mape_per_pixel(x, y, epsilon=1e-8): 
+  if x == 0: 
+    x += epsilon
+  error = (x - y) / x
+  absolute_error = torch.abs(error)
+  mean_absolute_error = torch.mean(absolute_error)
+  total_mape = 100 * mean_absolute_error
+  return total_mape
 
 def train_model(epochs, batch_size, device):
 
@@ -42,7 +53,8 @@ def train_model(epochs, batch_size, device):
     adjinit = supports[0]
 
   model = Modified_UNET(supports)
-  model.to(device=device)
+
+  model = nn.DataParallel(model).to(device=device)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -53,7 +65,7 @@ def train_model(epochs, batch_size, device):
 
   # Load dataset
   # TODO: make start_index a hyperparameter
-  dataset = BlackMarbleDataset(dir_image, start_index=7)
+  dataset = BlackMarbleDataset(dir_image, size='S', start_index=7)
 
   # Split into train / validation partitions
   n_test = int(len(dataset) * 0.2)
@@ -61,9 +73,6 @@ def train_model(epochs, batch_size, device):
   n_train = len(dataset) - (n_val + n_test)
   train_set, val_set, test_set = random_split(dataset, [n_train, n_val, n_test], generator=torch.Generator().manual_seed(0))
 
-  print(n_test)
-  print(n_val)
-  print(n_train)
 
   # Create data loaders
   loader_args = dict(batch_size=batch_size, num_workers=1, pin_memory=True)
@@ -74,11 +83,22 @@ def train_model(epochs, batch_size, device):
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
   criterion = mse_per_pixel
+  
+  # Alternative Benchmarks
+  rmse = rmse_per_pixel
+  mape = mape_per_pixel
 
+  train_loss_hist = []
+  val_loss_hist = []
+  rmse_hist = []
+  mape_hist = []
+  
   # Begin training
   for epoch in range(epochs):
     model.train()
     epoch_loss = 0
+    train_rmse = 0
+    train_mape = 0
     
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
    
@@ -92,6 +112,12 @@ def train_model(epochs, batch_size, device):
         # pixel-wise MSE 
         loss = criterion(preds_tensor, future_tensor)
         
+        # pixel-wise RMSE
+        train_rmse += rmse(preds_tensor, future_tensor)
+        
+        #pixel-wise MAPE
+        train_mape += mape(preds_tensor, future_tensor)
+        
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -100,7 +126,7 @@ def train_model(epochs, batch_size, device):
         pbar.update(past_tensor.shape[0])    
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
-      
+        print_memory_usage() 
 
     model.eval()
     val_loss = 0
@@ -118,9 +144,28 @@ def train_model(epochs, batch_size, device):
 
     avg_train_loss = epoch_loss / len(train_loader)
     avg_val_loss = val_loss / len(val_loader)
+    
+    avg_rmse_loss = train_rmse / len(train_loader)
+    avg_mape_loss = train_mape / len(train_loader)
 
-    print(f'Epoch {epoch + 1}, Training Loss: {avg_train_loss:.4f}, Validation Loss: {avg_val_loss:.4f}')
+    print(f'type of avg_train_loss {type(avg_train_loss)}')
+    print(f'type of avg_val_loss: {type(avg_val_loss)}')
+    print(f'type of avg_rmse_loss: {type(avg_rmse_loss)}')
+    print(f'type of avg_mape_loss: {type(avg_mape_loss)}')
 
+    train_loss_hist.append(avg_train_loss)
+    val_loss_hist.append(avg_val_loss)
+    rmse_hist.append(avg_rmse_loss.cpu().detach().numpy())
+    mape_hist.append(avg_mape_loss.cpu().detach().numpy())
+
+    print(f'Epoch {epoch + 1}, \
+          Training Loss (MSE): {avg_train_loss:.4f}, \
+          RMSE Loss: {avg_rmse_loss:.4f}, \
+          MAPE Loss: {avg_mape_loss:.4f}, \
+          Validation Loss: {avg_val_loss:.4f}')
+
+  save_path = 'training_history_plot.png' 
+  plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path)
 
   model.eval()
   test_loss = 0
@@ -154,5 +199,5 @@ if __name__ == '__main__':
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(epochs=10, batch_size=4, device=device)
+  train_model(epochs=2, batch_size=4, device=device)
 

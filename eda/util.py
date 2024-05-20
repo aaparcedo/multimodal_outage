@@ -60,8 +60,6 @@ def find_available_dates(base_dir=None, county_dir=None):
                         for date in common_dates_list]
 
         return common_dates
-
-
 def preprocess_raster_images():
     """
     Process all xarray/pickle/raw satellite images into RGB image (JPG).
@@ -216,7 +214,6 @@ def calculate_percent_of_normal_of_day(daily_image, month_composites):
 
     return percent_normal_image
 
-
 def pad_smaller_satellite_image(daily_ntl, average_month_ntl):
     # Calculate the padding for each dimension
     pad_width = []
@@ -249,7 +246,6 @@ def calculate_average_month_ntl(daily_image, month_composites):
     """
 
     day = daily_image.time.values
-
     np.set_printoptions(threshold=np.inf)
 
     # get dates of previous 3 months
@@ -267,7 +263,7 @@ def calculate_average_month_ntl(daily_image, month_composites):
         monthly_ntl, axis=0, where=~np.isnan(monthly_ntl))
 
     return average_month_ntl
-
+    return daily_ntl, average_month_ntl
 
 def save_satellite_image_square(raster_image, save_path):
 
@@ -317,7 +313,6 @@ def load_month_composites(county_name):
 
     base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/monthly"
     county_dir = os.path.join(base_dir, county_name)
-
     file_path = os.path.join(county_dir, f"{county_name}.pickle")
 
     with open(file_path, 'rb') as file:
@@ -411,36 +406,30 @@ def download_county_raster(county, quality_flag, freq, start_date, end_date=None
 def download_missing_dates(dataset_county_path):
     """
     Find dates where Black Marble data is missing.
-
     Parameters:
     - dataset_county_path (str): the path to the dataset directory for the county
 
     Returns:
     - inverse_dates
     """
-
     # want data in this time frame
     required_dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
 
     available_data_file_names = os.listdir(dataset_county_path)
     available_data_file_names_formatted = pd.to_datetime([file_name.replace(
         '_', '-').replace('.pickle', '') for file_name in available_data_file_names])
-
     inverse_dates = required_dates[~required_dates.isin(
         available_data_file_names_formatted)]
 
     return inverse_dates
 
-
 def big_download_fl_county_raster():
     """
-
     Parameters:
 
     Returns:
     - N/A
     """
-
     base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
     # hq because quality_flag_rm=[2, 255]
     flag_dataset_path = os.path.join(base_dataset_path, "hq/original")
@@ -464,7 +453,6 @@ def big_download_fl_county_raster():
             continue
 
         num_days_retrieved = daily_dataset.sizes['time']
-
         for day_idx in range(num_days_retrieved):
             raster = daily_dataset.isel(time=day_idx)
             day = str(raster.coords['time'])[-10:].replace('-', '_')
@@ -759,7 +747,6 @@ def get_total_customers_in_county(county):
     # get the total customers in our desired county
     total_customers_in_county = county_zip_data.groupby(
         'Zip Code')['Total Customers'].max().sum()
-
     return total_customers_in_county
 
 
