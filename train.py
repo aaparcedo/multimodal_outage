@@ -28,7 +28,9 @@ def mae_per_pixel(x, y):
   total_mae = torch.mean(absolute_error)
   return total_mae
   
-def mape_per_pixel(x, y): 
+def mape_per_pixel(x, y, epsilon=1e-8): 
+  if x == 0: 
+    x += epsilon
   error = (x - y) / x
   absolute_error = torch.abs(error)
   mean_absolute_error = torch.mean(absolute_error)
