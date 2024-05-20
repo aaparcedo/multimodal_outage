@@ -30,7 +30,6 @@ def mae_per_pixel(x, y):
 def mape_per_pixel(x, y, epsilon=1e-8): 
   return torch.mean(torch.abs((x - y) / (x + epsilon)))
 
-
 def train_model(epochs, batch_size, device):
 
   randomadj = True
@@ -81,6 +80,7 @@ def train_model(epochs, batch_size, device):
   
   # Alternative Benchmarks
   rmse = rmse_per_pixel
+  mae = mae_per_pixel
   mape = mape_per_pixel
 
   train_loss_hist = []
@@ -93,6 +93,7 @@ def train_model(epochs, batch_size, device):
     model.train()
     epoch_loss = 0
     train_rmse = 0
+    train_mae = 0
     train_mape = 0
     
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
@@ -110,8 +111,10 @@ def train_model(epochs, batch_size, device):
         # pixel-wise RMSE & MAPE
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
+          mae_loss = mae(preds_tensor, future_tensor)
           mape_loss = mape(preds_tensor, future_tensor)        
         train_rmse += rmse_loss.item()
+        train_mae += mae_loss.item()
         train_mape += mape_loss.item()
 
         optimizer.zero_grad()
