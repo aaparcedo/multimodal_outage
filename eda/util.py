@@ -60,6 +60,8 @@ def find_available_dates(base_dir=None, county_dir=None):
                         for date in common_dates_list]
 
         return common_dates
+
+
 def preprocess_raster_images():
     """
     Process all xarray/pickle/raw satellite images into RGB image (JPG).
@@ -73,13 +75,12 @@ def preprocess_raster_images():
 
     start_time = time.time()  # Record start time
 
-    county_names = get_county_names_from_state_gdf()
-
-    # county_names = ["manatee"]
     base_dir = '/groups/mli/multimodal_outage/data/black_marble/hq/'
     raw_dir = os.path.join(base_dir, 'original')
     ntl_dir = os.path.join(base_dir, 'ntl')
     percent_normal_dir = os.path.join(base_dir, 'percent_normal')
+
+    county_names = os.listdir(raw_dir)
 
     total_common_dates = find_available_dates(base_dir=raw_dir)
     total_common_dates = [
