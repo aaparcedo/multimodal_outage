@@ -8,26 +8,31 @@ import numpy as np
 
 
 class BlackMarbleDataset(Dataset):
-  def __init__(self, data_dir, start_index=7, transform=None):
+  def __init__(self, data_dir, size, start_index=7, transform=None):
     self.data_dir = data_dir
+    self.size = size
     self.start_index = start_index
     self.county_paths = os.listdir(data_dir)
     self.transform = transform if transform is not None else transforms.ToTensor()
 
     # Sorting each county's images by date
     self.sorted_image_paths = {
-      county: sorted(os.listdir(os.path.join(data_dir, county)),
-        key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0])))  # Improved date sorting
-        for county in self.county_paths
+      county: find_case_study_dates(
+        size,
+        sorted(os.listdir(os.path.join(data_dir, county)),
+          key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0])))
+      ) for county in self.county_paths
     }
+    
 
   def __len__(self):
-      return len(os.listdir(os.path.join(self.data_dir, "orange"))) - ( self.start_index * 2 )
+     return len(self.sorted_image_paths['orange'])
 
   def __iter__(self):
       return iter(range(self.start_index, len(self.data_dir)))
 
   def __getitem__(self, idx):
+
 
     past_image_list = []  
     future_image_list = []
@@ -38,7 +43,7 @@ class BlackMarbleDataset(Dataset):
       future_days_image_list = []
 
       for county in self.county_paths:
-        county_path = os.path.join(self.data_dir, county)
+        county_path = os.path.join(self.data_dir, county)            
         past_image_path = os.path.join(county_path, self.sorted_image_paths[county][day])
         future_image_path = os.path.join(county_path, self.sorted_image_paths[county][day + self.start_index])
 
@@ -54,13 +59,48 @@ class BlackMarbleDataset(Dataset):
 
       past_image_list.append(torch.stack(past_days_image_list))  # Stack all county images for one day
       future_image_list.append(torch.stack(future_days_image_list))
-
+        
     past_image_tensor = torch.stack(past_image_list)
     future_image_tensor = torch.stack(future_image_list)
 
     # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
     # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
     return (past_image_tensor, future_image_tensor)
+
+
+def find_case_study_dates(size, image_paths):
+  
+  if size == 'S':
+    horizon = 90
+  elif size == 'M':
+    horizon = 180
+  elif size == 'L':
+    horizon = 365
+  else:
+    print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
+
+  timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
+  dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
+  print(dates)
+  #case_study_dates = {'irma': pd.Timestamp('2017-09-10'), 'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
+  case_study_dates = {'ian': pd.Timestamp('2022-09-26')}
+
+  case_study_indices = [dates.index(date) for date in case_study_dates.values()]
+
+  filtered_dates = []
+
+  for case_study_index in case_study_indices:
+    start_index = case_study_index - horizon
+    end_index = case_study_index + horizon
+
+    case_study_dates = dates[start_index:end_index]
+
+    filtered_dates += case_study_dates
+
+  filtered_image_paths = [timestamp_to_image[date] for date in filtered_dates]
+
+  return filtered_image_paths
+
 
 # Graph WaveNet utilities:
 
