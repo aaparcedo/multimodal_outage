@@ -145,6 +145,7 @@ def train_model(epochs, batch_size, device):
     avg_val_loss = val_loss / len(val_loader)
     
     avg_rmse_loss = train_rmse / len(train_loader)
+    avg_mae_loss = train_mae / len(train_loader)
     avg_mape_loss = train_mape / len(train_loader)
 
     train_loss_hist.append(avg_train_loss)
@@ -155,6 +156,7 @@ def train_model(epochs, batch_size, device):
     print(f'Epoch {epoch + 1}, \
           Training Loss (MSE): {avg_train_loss:.4f}, \
           RMSE Loss: {avg_rmse_loss:.4f}, \
+          MAE Loss: {avg_mae_loss:.4f}, \
           MAPE Loss: {avg_mape_loss:.4f}, \
           Validation Loss: {avg_val_loss:.4f}')
 
