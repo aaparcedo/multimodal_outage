@@ -28,13 +28,8 @@ def mae_per_pixel(x, y):
   return total_mae
   
 def mape_per_pixel(x, y, epsilon=1e-8): 
-  if x == 0: 
-    x += epsilon
-  error = (x - y) / x
-  absolute_error = torch.abs(error)
-  mean_absolute_error = torch.mean(absolute_error)
-  total_mape = 100 * mean_absolute_error
-  return total_mape
+  return torch.mean(torch.abs((x - y) / (x + epsilon)))
+
 
 def train_model(epochs, batch_size, device):
 
@@ -68,7 +63,7 @@ def train_model(epochs, batch_size, device):
   dataset = BlackMarbleDataset(dir_image, size='S', start_index=7)
 
   # Split into train / validation partitions
-  n_test = int(len(dataset) * 0.2)
+  n_test = int(len(dataset) * 0.1)
   n_val = int(len(dataset) * 0.2)
   n_train = len(dataset) - (n_val + n_test)
   train_set, val_set, test_set = random_split(dataset, [n_train, n_val, n_test], generator=torch.Generator().manual_seed(0))
@@ -112,14 +107,11 @@ def train_model(epochs, batch_size, device):
         # pixel-wise MSE 
         loss = criterion(preds_tensor, future_tensor)
         
-        # pixel-wise RMSE
+        # pixel-wise RMSE & MAPE
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
+          mape_loss = mape(preds_tensor, future_tensor)        
         train_rmse += rmse_loss.item()
-        
-        #pixel-wise MAPE
-        with torch.no_grad():
-          mape_loss = mape(preds_tensor, future_tensor)
         train_mape += mape_loss.item()
 
         optimizer.zero_grad()
@@ -152,15 +144,10 @@ def train_model(epochs, batch_size, device):
     avg_rmse_loss = train_rmse / len(train_loader)
     avg_mape_loss = train_mape / len(train_loader)
 
-    print(f'type of avg_train_loss {type(avg_train_loss)}')
-    print(f'type of avg_val_loss: {type(avg_val_loss)}')
-    print(f'type of avg_rmse_loss: {type(avg_rmse_loss)}')
-    print(f'type of avg_mape_loss: {type(avg_mape_loss)}')
-
     train_loss_hist.append(avg_train_loss)
     val_loss_hist.append(avg_val_loss)
-    rmse_hist.append(avg_rmse_loss.cpu().detach().numpy())
-    mape_hist.append(avg_mape_loss.cpu().detach().numpy())
+    rmse_hist.append(avg_rmse_loss)
+    mape_hist.append(avg_mape_loss)
 
     print(f'Epoch {epoch + 1}, \
           Training Loss (MSE): {avg_train_loss:.4f}, \
@@ -203,5 +190,5 @@ if __name__ == '__main__':
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(epochs=2, batch_size=4, device=device)
+  train_model(epochs=10, batch_size=4, device=device)
 

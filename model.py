@@ -343,7 +343,7 @@ class Decoder(nn.Module):
         
         for county in range(n_counties):           
             x = torch.relu(self.fc1(input[county]))
-            x = self.dropout(x)
+        #    x = self.dropout(x)
             x = torch.relu(self.fc2(x))
             x = self.fc3(x)
             expansion_input.append(x)
@@ -387,7 +387,7 @@ class Modified_UNET(nn.Module):
         self.expansion = Expansion(output_channels)
 
         # TODO: make dynamic
-        self.gwn = gwnet(device='cuda', num_nodes=67, dropout=0.3, supports=supports, in_dim=8, out_dim=8)
+        self.gwn = gwnet(device='cuda', num_nodes=67, dropout=0.3, supports=supports, in_dim=feature_vector_size, out_dim=feature_vector_size)
  
     def forward(self, input):
         result = []  
