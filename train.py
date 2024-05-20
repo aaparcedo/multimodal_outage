@@ -107,11 +107,15 @@ def train_model(epochs, batch_size, device):
         loss = criterion(preds_tensor, future_tensor)
         
         # pixel-wise RMSE
-        train_rmse += rmse(preds_tensor, future_tensor)
+        with torch.no_grad():
+          rmse_loss = rmse(preds_tensor, future_tensor)
+        train_rmse += rmse_loss.item()
         
         #pixel-wise MAPE
-        train_mape += mape(preds_tensor, future_tensor)
-        
+        with torch.no_grad():
+          mape_loss = mape(preds_tensor, future_tensor)
+        train_mape += mape_loss.item()
+
         optimizer.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)

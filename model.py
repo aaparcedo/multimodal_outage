@@ -15,7 +15,7 @@ image_dimension = 128
 batch_size = 4
 n_counties = 67
 n_timestep = 7 
-feature_vector_size = 8
+feature_vector_size = 16
 
 # Graph WaveNet
 class nconv(nn.Module):
@@ -307,30 +307,20 @@ class Contraction(nn.Module):
         
         return encoder_input
     
-class Encoder(nn.Module): 
+class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
         self.downsized_image_dimension = image_dimension / 16
         self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
-        self.fc1 = nn.Linear(self.first_layer_size, 512)
-        self.fc2 = nn.Linear(512, 256)
-        self.fc3 = nn.Linear(256, 128)
-        self.fc4 = nn.Linear(128, 64)
-        self.fc5 = nn.Linear(64, 32)
-        self.fc6 = nn.Linear(32, 16)
-        self.fc7 = nn.Linear(16, 8)
+        self.fc1 = nn.Linear(self.first_layer_size, 256)
+        self.fc2 = nn.Linear(256, feature_vector_size)
 
     def forward(self, input):
         wave_net_input = []
         
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
-            x = torch.relu(self.fc2(x))
-            x = torch.relu(self.fc3(x))
-            x = torch.relu(self.fc4(x))
-            x = torch.relu(self.fc5(x))
-            x = torch.relu(self.fc6(x))
-            x = self.fc7(x)
+            x = self.fc2(x)
             wave_net_input.append(x)
             
         wave_net_input = torch.stack(wave_net_input)
@@ -342,20 +332,16 @@ class Decoder(nn.Module):
         self.downsized_image_dimension = int(image_dimension / 16)
         self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(feature_vector_size, 64)
-        self.fc2 = nn.Linear(64, 128)
-        self.fc3 = nn.Linear(128, 256)
-        self.fc4 = nn.Linear(256, 512)
-        self.fc5 = nn.Linear(512, self.output_layer_size) 
+        self.fc2 = nn.Linear(64, 256)
+        self.fc3 = nn.Linear(256, self.output_layer_size) 
         
     def forward(self, input):
         expansion_input = []
         
-        for county in range(n_counties):
+        for county in range(n_counties):           
             x = torch.relu(self.fc1(input[county]))
             x = torch.relu(self.fc2(x))
-            x = torch.relu(self.fc3(x))
-            x = torch.relu(self.fc4(x))
-            x = self.fc5(x)
+            x = self.fc3(x)
             expansion_input.append(x)
             
         expansion_input = torch.stack(expansion_input)
