@@ -109,21 +109,21 @@ class gwnet(nn.Module):
                 # dilated convolutions
                 self.filter_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                    out_channels=dilation_channels,
-                                                   kernel_size=(1,kernel_size),dilation=new_dilation))
+                                                   kernel_size=(1, 1), dilation=new_dilation))
 
                 self.gate_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                  out_channels=dilation_channels,
-                                                 kernel_size=(1, kernel_size), dilation=new_dilation))
+                                                 kernel_size=(1, 1),  dilation=new_dilation))
 
                 # 1x1 convolution for residual connection
                 self.residual_convs.append(nn.Conv2d(in_channels=dilation_channels,
                                                      out_channels=residual_channels,
-                                                     kernel_size=(1, kernel_size)))
+                                                     kernel_size=(1, 1)))
 
                 # 1x1 convolution for skip connection
                 self.skip_convs.append(nn.Conv2d(in_channels=dilation_channels,
                                                  out_channels=skip_channels,
-                                                 kernel_size=(1, kernel_size)))
+                                                 kernel_size=(1, 1)))
                 self.bn.append(nn.BatchNorm2d(residual_channels))
                 new_dilation *=2
                 receptive_field += additional_scope
@@ -222,8 +222,10 @@ class DoubleConv(nn.Module):
         super().__init__()
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False), 
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),                                                     
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)                                                       
         )
 
@@ -318,18 +320,25 @@ class Encoder(nn.Module):
         self.fc4 = nn.Linear(128, 64)
         self.fc5 = nn.Linear(64, 32)
         self.fc6 = nn.Linear(32, 16)
-        self.fc7 = nn.Linear(16, 8)
+        self.fc7 = nn.Linear(16, 8) # (16, 8)
+        self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, input):
         wave_net_input = []
         
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
+            x = self.dropout(x)
             x = torch.relu(self.fc2(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc3(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc4(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc5(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc6(x))
+            x = self.dropout(x)
             x = self.fc7(x)
             wave_net_input.append(x)
             
@@ -341,20 +350,26 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.downsized_image_dimension = int(image_dimension / 16)
         self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
-        self.fc1 = nn.Linear(feature_vector_size, 64)
+        self.fc1 = nn.Linear(feature_vector_size, 64) # (, 64)
         self.fc2 = nn.Linear(64, 128)
         self.fc3 = nn.Linear(128, 256)
         self.fc4 = nn.Linear(256, 512)
         self.fc5 = nn.Linear(512, self.output_layer_size) 
+        self.dropout = nn.Dropout(p=0.5)
         
+
     def forward(self, input):
         expansion_input = []
         
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
+            x = self.dropout(x)
             x = torch.relu(self.fc2(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc3(x))
+            x = self.dropout(x)
             x = torch.relu(self.fc4(x))
+            x = self.dropout(x)
             x = self.fc5(x)
             expansion_input.append(x)
             
