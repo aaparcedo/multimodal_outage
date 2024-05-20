@@ -314,15 +314,17 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.downsized_image_dimension = image_dimension / 16
         self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
-        self.fc1 = nn.Linear(self.first_layer_size, 256)
-        self.fc2 = nn.Linear(256, feature_vector_size)
+        self.fc1 = nn.Linear(self.first_layer_size, 1024)
+        self.fc2 = nn.Linear(1024, 256)
+        self.fc3 = nn.Linear(256, feature_vector_size)
 
     def forward(self, input):
         wave_net_input = []
         
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
-            x = self.fc2(x)
+            x = torch.relu(self.fc2(x))
+            x = self.fc3(x)
             wave_net_input.append(x)
             
         wave_net_input = torch.stack(wave_net_input)
@@ -335,17 +337,17 @@ class Decoder(nn.Module):
         self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(feature_vector_size, 64)
         self.fc2 = nn.Linear(64, 256)
-        self.fc3 = nn.Linear(256, self.output_layer_size) 
+        self.fc3 = nn.Linear(256, 1024) 
+        self.fc4 = nn.Linear(1024, self.output_layer_size) 
         
-
     def forward(self, input):
         expansion_input = []
         
         for county in range(n_counties):           
             x = torch.relu(self.fc1(input[county]))
-        #    x = self.dropout(x)
             x = torch.relu(self.fc2(x))
-            x = self.fc3(x)
+            x = torch.relu(self.fc3(x))
+            x = self.fc4(x)
             expansion_input.append(x)
             
         expansion_input = torch.stack(expansion_input)
