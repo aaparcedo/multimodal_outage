@@ -5,7 +5,7 @@ import os
 from PIL import Image
 import pandas as pd
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 class BlackMarbleDataset(Dataset):
   def __init__(self, data_dir, size, start_index=7, transform=None):
@@ -71,7 +71,7 @@ class BlackMarbleDataset(Dataset):
 def find_case_study_dates(size, image_paths):
   
   if size == 'S':
-    horizon = 90
+    horizon = 45 # or 90 
   elif size == 'M':
     horizon = 180
   elif size == 'L':
@@ -135,6 +135,31 @@ def load_adj(filename, adjtype):
 
 # End of Graph WaveNet utilities.
 
+def plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path):
+    epochs = range(1, len(train_loss_hist) + 1)
+    
+    plt.figure(figsize=(12, 8))
+    
+    # Plot training and validation loss
+    plt.subplot(2, 1, 1)
+    plt.plot(epochs, train_loss_hist, label='Training Loss')
+    plt.plot(epochs, val_loss_hist, label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    
+    # Plot RMSE and MAPE
+    plt.subplot(2, 1, 2)
+    plt.plot(epochs, rmse_hist, label='RMSE')
+    plt.plot(epochs, mape_hist, label='MAPE')
+    plt.title('RMSE and MAPE')
+    plt.xlabel('Epochs')
+    plt.ylabel('Metrics')
+    plt.legend()
+    
+    plt.tight_layout()
+    plt.savefig(save_path)
 
 def print_memory_usage():
     print(f"Allocated: {torch.cuda.memory_allocated() / 1e9} GB")

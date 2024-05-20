@@ -60,8 +60,6 @@ def find_available_dates(base_dir=None, county_dir=None):
                         for date in common_dates_list]
 
         return common_dates
-
-
 def preprocess_raster_images():
     """
     Process all xarray/pickle/raw satellite images into RGB image (JPG).
@@ -85,8 +83,10 @@ def preprocess_raster_images():
 
     total_common_dates = find_available_dates(base_dir=raw_dir)
     total_common_dates = [
-        date for date in total_common_dates if date.year == 2022]
+        date for date in total_common_dates if date.year == 2018]
     total_common_dates.sort()
+
+    # do not process the first 90 days because there are no composites to compare to
 
     # ucomment this when processing all years
     # total_common_dates = total_common_dates[120:]
@@ -105,7 +105,7 @@ def preprocess_raster_images():
         processed_dates = find_available_dates(county_dir=processed_county_dir)
         with open('output.txt', 'a') as f:
             print(f"county {county}")
-            f.write(f"county {county}\n")
+            f.write(f"Before processing county {county}\n")
             print("total common dates: ", len(total_common_dates))
             f.write(f"total common dates {len(total_common_dates)}\n")
             print("processed_dates length", len(processed_dates))
@@ -124,7 +124,7 @@ def preprocess_raster_images():
             # dates_left_to_process = total_common_dates_set.symmetric_difference(
             #     processed_dates_set)
             print("num dates left to process", len(dates_left_to_process))
-            f.write(f"num dates left to process {len(dates_left_to_process)}\n\n")
+            f.write(f"num dates left to process {len(dates_left_to_process)}\n\n\n\n\n")
 
         # these two are for the save function
         save_file_path_ntl = os.path.join(ntl_dir, county)
@@ -149,6 +149,13 @@ def preprocess_raster_images():
                 daily_image, month_composites)
 
             # send to be resized to a specified tbd size and saved to special folder
+            with open("output.txt", "a") as f:
+              f.write(f"After processing county {county}")
+              f.write(f"total common dates {len(total_common_dates)}\n")
+              f.write(f"processed_dates length {len(processed_dates)}\n")
+              f.write(f"intersection set length {len(intersection_set)}\n")
+              f.write(f"num dates left to process {len(dates_left_to_process)}\n\n\n\n\n")
+
             save_satellite_image_square(daily_image, save_file_path_ntl)
             save_satellite_image_square(
                 percent_normal_image, save_file_path_percent_normal)
@@ -207,7 +214,6 @@ def calculate_percent_of_normal_of_day(daily_image, month_composites):
 
     return percent_normal_image
 
-
 def pad_smaller_satellite_image(daily_ntl, average_month_ntl):
     # Calculate the padding for each dimension
     pad_width = []
@@ -240,7 +246,6 @@ def calculate_average_month_ntl(daily_image, month_composites):
     """
 
     day = daily_image.time.values
-
     np.set_printoptions(threshold=np.inf)
 
     # get dates of previous 3 months
@@ -258,7 +263,7 @@ def calculate_average_month_ntl(daily_image, month_composites):
         monthly_ntl, axis=0, where=~np.isnan(monthly_ntl))
 
     return average_month_ntl
-
+    return daily_ntl, average_month_ntl
 
 def save_satellite_image_square(raster_image, save_path):
 
@@ -274,21 +279,25 @@ def save_satellite_image_square(raster_image, save_path):
     else:
         cmap = "RdYlGn"
 
-    c = ax.pcolormesh(raster_image.x, raster_image.y,
-                      raster_image["DNB_BRDF-Corrected_NTL"], shading='auto', cmap=cmap)
-    cx.add_basemap(ax, crs="EPSG:4326")
-    plt.gca().set(xticks=[], yticks=[])
-    plt.tight_layout(pad=0)
+    
+    if raster_image.x is not None and raster_image.y is not None:
+      c = ax.pcolormesh(raster_image.x, raster_image.y, raster_image["DNB_BRDF-Corrected_NTL"], shading='auto', cmap=cmap)
+      cx.add_basemap(ax, crs="EPSG:4326")
+      plt.gca().set(xticks=[], yticks=[])
+      plt.tight_layout(pad=0)
 
-    canvas = FigureCanvasAgg(fig)
-    canvas.draw()
+      canvas = FigureCanvasAgg(fig)
+      canvas.draw()
 
-    pil_image = Image.frombytes(
-        'RGB', canvas.get_width_height(), canvas.tostring_rgb())
-    resized_image = pil_image.resize((128, 128), Image.LANCZOS)
-    resized_image.save(save_path)
-    print(f"saved path of image {save_path}")
-    plt.close(fig)
+      pil_image = Image.frombytes('RGB', canvas.get_width_height(), canvas.tostring_rgb())
+      resized_image = pil_image.resize((128, 128), Image.LANCZOS)
+      resized_image.save(save_path)
+      print(f"saved path of image {save_path}")
+      plt.close(fig)
+    else:
+      with open("output.txt", 'a') as f:
+        f.write(f"Error: Coordinate information for raster image that is supposed to be saved in {save_path}")
+      print("Error: Coordinate information missing in the raster image.")
 
 
 def load_month_composites(county_name):
@@ -304,7 +313,6 @@ def load_month_composites(county_name):
 
     base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/monthly"
     county_dir = os.path.join(base_dir, county_name)
-
     file_path = os.path.join(county_dir, f"{county_name}.pickle")
 
     with open(file_path, 'rb') as file:
@@ -361,90 +369,67 @@ def get_gdf(county_name):
     return county_gdf
 
 
-def download_county_raster(county, quality_flag, freq, dates=None, start_date=None, end_date=None):
-  """
-  Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
+def download_county_raster(county, quality_flag, freq, start_date, end_date=None):
+    """
+    Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
 
-  Parameters:
-  - county (str): name of the county
-  - start_date (Timestamp) :
-  - end_date (Timestamp) :
-  - quality_flag (list): desired quality flag, e.g., [2, 255]
-  - freq (str): frequency of image (options 'D' or 'MS')
+    Parameters:
+    - county (str): name of the county
+    - start_date (Timestamp) :
+    - end_date (Timestamp) :
+    - quality_flag (list): desired quality flag, e.g., [2, 255]
+    - freq (str): frequency of image (options 'D' or 'MS')
 
-  Returns:
-  raster (xarray): object of satellite image
-  """  
+    Returns:
+    raster (xarray): object of satellite image
+    """
 
-  county_gdf = get_gdf(county)
+    county_gdf = get_gdf(county)
+    dates = pd.date_range(
+        start_date, end_date if end_date else start_date, freq=freq)
 
-  if dates is None:
-    dates = pd.date_range(start_date, end_date if end_date else start_date, freq=freq)  
+    if freq == 'D':
+        product_id = "VNP46A2"
+        variable = "DNB_BRDF-Corrected_NTL"
+    elif freq == 'MS':
+        product_id = "VNP46A3"
+        variable = "NearNadir_Composite_Snow_Free"
+    else:
+        print("Pick a valid time frequency, i.e., 'D' or 'M'")
 
-  if freq == 'D':
-    product_id = "VNP46A2"
-    variable = "DNB_BRDF-Corrected_NTL"
-  elif freq == 'MS':
-    product_id = "VNP46A3"
-    variable = "NearNadir_Composite_Snow_Free"
-  else:
-    print("Pick a valid time frequency, i.e., 'D' or 'M'")
+    raster = bm_raster(county_gdf, product_id=product_id, date_range=dates,
+                       bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
 
-  download_log_folder_path = "/home/aaparcedo/multimodal_outage/eda/download_logs"
-  download_log_file_path = os.path.join(download_log_folder_path, f"{county}_error_log.txt")
-  raster_file_path = os.path.join("/groups/mli/multimodal_outage/data/black_marble/hq/original/{county}")
-
-  with open(download_log_file_path, 'a') as f:
-    for date in dates:
-      print(f'trying date {date}')
-      try:
-        raster = bm_raster(county_gdf, product_id=product_id, date_range=date, bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
-        
-        day = str(raster.coords['time'])[-10:].replace('-', '_')
-        pickle_path = os.path.join(raster_file_path, f"{day}.pickle")
-        with open(pickle_path, 'wb') as pickled_raster:
-          pickle.dump(raster, pickled_raster)
-        f.write(f'Successfully downloaded data for {county} on {day}')
-        print(f'Successfully downloaded data for {county} on {day}')
-      except Exception as e:
-        f.write(f'Error downloading data for {date}.')
-        print(f'Error downloading data for {date}.')
-  return raster 
+    return raster
 
 
 def download_missing_dates(dataset_county_path):
     """
     Find dates where Black Marble data is missing.
-
     Parameters:
     - dataset_county_path (str): the path to the dataset directory for the county
 
     Returns:
     - inverse_dates
     """
-
     # want data in this time frame
     required_dates = pd.date_range('2012-01-19', '2024-04-17', freq='D')
 
     available_data_file_names = os.listdir(dataset_county_path)
     available_data_file_names_formatted = pd.to_datetime([file_name.replace(
         '_', '-').replace('.pickle', '') for file_name in available_data_file_names])
-
     inverse_dates = required_dates[~required_dates.isin(
         available_data_file_names_formatted)]
 
     return inverse_dates
 
-
 def big_download_fl_county_raster():
     """
-
     Parameters:
 
     Returns:
     - N/A
     """
-
     base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
     # hq because quality_flag_rm=[2, 255]
     flag_dataset_path = os.path.join(base_dataset_path, "hq/original")
@@ -468,7 +453,6 @@ def big_download_fl_county_raster():
             continue
 
         num_days_retrieved = daily_dataset.sizes['time']
-
         for day_idx in range(num_days_retrieved):
             raster = daily_dataset.isel(time=day_idx)
             day = str(raster.coords['time'])[-10:].replace('-', '_')
@@ -763,7 +747,6 @@ def get_total_customers_in_county(county):
     # get the total customers in our desired county
     total_customers_in_county = county_zip_data.groupby(
         'Zip Code')['Total Customers'].max().sum()
-
     return total_customers_in_county
 
 
