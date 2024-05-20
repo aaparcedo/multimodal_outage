@@ -81,7 +81,6 @@ def find_case_study_dates(size, image_paths):
 
   timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
   dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
-  print(dates)
   #case_study_dates = {'irma': pd.Timestamp('2017-09-10'), 'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
   case_study_dates = {'ian': pd.Timestamp('2022-09-26')}
 

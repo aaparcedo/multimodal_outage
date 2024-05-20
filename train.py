@@ -63,7 +63,7 @@ def train_model(epochs, batch_size, device):
 
   # Load dataset
   # TODO: make start_index a hyperparameter
-  dataset = BlackMarbleDataset(dir_image, start_index=7)
+  dataset = BlackMarbleDataset(dir_image, size='S', start_index=7)
 
   # Split into train / validation partitions
   n_test = int(len(dataset) * 0.2)
@@ -141,10 +141,10 @@ def train_model(epochs, batch_size, device):
     avg_rmse_loss = train_rmse / len(train_loader)
     avg_mape_loss = train_mape / len(train_loader)
 
-    print(f'Epoch {epoch + 1}, 
-          Training Loss (MSE): {avg_train_loss:.4f}, 
-          RMSE Loss: {avg_rmse_loss:.4f}, 
-          MAPE Loss: {avg_mape_loss:.4f},
+    print(f'Epoch {epoch + 1}, \
+          Training Loss (MSE): {avg_train_loss:.4f}, \
+          RMSE Loss: {avg_rmse_loss:.4f}, \
+          MAPE Loss: {avg_mape_loss:.4f}, \
           Validation Loss: {avg_val_loss:.4f}')
 
   model.eval()
