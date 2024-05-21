@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 
-from graph_wavenet import gwnet
+from .graph_wavenet import gwnet
 
 # Hyperparameters
 
@@ -182,6 +182,8 @@ class Expansion(nn.Module):
 
         predictions = torch.stack(predictions)
 
+        return predictions
+
 class Modified_UNET(nn.Module):
     def __init__(self,supports, input_channels=3, output_channels=3):
         super(Modified_UNET, self).__init__()
@@ -198,20 +200,12 @@ class Modified_UNET(nn.Module):
         for batch in range(input.shape[0]):
             output = self.contraction(input[batch])
             output = self.encoder(output)
-            #print(f'encoder output shape: {output.shape}')
-
             output = output.unsqueeze(0).permute(0, 3, 1, 2)
-            #print(f'encoder output shape unsqueeze and reshaped: {output.shape}')            
-
             output = self.gwn(output)
-            #print(f"gwn output shape: {output.shape}")
             output = output.squeeze(0).permute(1, 2, 0)
-            #print(f"output shape (squeeze and permute) before decoder: {output.shape}")
-
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps
             predicted_results = self.expansion(output, feature_maps)
             result.append(predicted_results)
-
         result = torch.stack(result)
         return result
