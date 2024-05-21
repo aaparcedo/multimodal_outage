@@ -43,22 +43,18 @@ def find_available_dates(base_dir=None, county_dir=None):
         print("base_dir: ", base_dir)
         county_dirs = os.listdir(base_dir)
         for county_idx, county_dir in enumerate(county_dirs):
-
+            
             county_dir_path = os.path.join(base_dir, county_dir)
             days_avail = os.listdir(county_dir_path)
             # Set comprehension to extract dates
             dates_set = {day.split('.')[0] for day in days_avail}
-
             if common_dates is None:
                 common_dates = dates_set
             else:
                 common_dates = common_dates.intersection(dates_set)
-
         common_dates_list = list(common_dates)
-        # convert date(s) string to pd.Timestamp
         common_dates = [pd.Timestamp(date.replace('_', '-'))
                         for date in common_dates_list]
-
         return common_dates
 
 
@@ -84,13 +80,12 @@ def preprocess_raster_images():
 
     total_common_dates = find_available_dates(base_dir=raw_dir)
     total_common_dates = [
-        date for date in total_common_dates if date.year == 2018]
+        date for date in total_common_dates if date.year == 2012]
     total_common_dates.sort()
-
     # do not process the first 90 days because there are no composites to compare to
 
     # ucomment this when processing all years
-    # total_common_dates = total_common_dates[120:]
+    total_common_dates = total_common_dates[90:]
 
     print("total common dates: ", len(total_common_dates))
 
