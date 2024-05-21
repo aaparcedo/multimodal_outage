@@ -154,30 +154,48 @@ def load_adj(filename, adjtype):
         return sensor_ids, sensor_id_to_ind, adj
 
 # End of Graph WaveNet utilities.
-
-def plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path):
+def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist,
+                          train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path):
     epochs = range(1, len(train_loss_hist) + 1)
-    
-    plt.figure(figsize=(12, 8))
-    
+
+    plt.figure(figsize=(14, 10))
+
     # Plot training and validation loss
-    plt.subplot(2, 1, 1)
+    plt.subplot(4, 1, 1)
     plt.plot(epochs, train_loss_hist, label='Training Loss')
     plt.plot(epochs, val_loss_hist, label='Validation Loss')
     plt.title('Training and Validation Loss')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
-    
-    # Plot RMSE and MAPE
-    plt.subplot(2, 1, 2)
-    plt.plot(epochs, rmse_hist, label='RMSE')
-    plt.plot(epochs, mape_hist, label='MAPE')
-    plt.title('RMSE and MAPE')
+
+    # Plot training and validation RMSE
+    plt.subplot(4, 1, 2)
+    plt.plot(epochs, train_rmse_hist, label='Training RMSE')
+    plt.plot(epochs, val_rmse_hist, label='Validation RMSE')
+    plt.title('Training and Validation RMSE')
     plt.xlabel('Epochs')
-    plt.ylabel('Metrics')
+    plt.ylabel('RMSE')
     plt.legend()
-    
+
+    # Plot training and validation MAE
+    plt.subplot(4, 1, 3)
+    plt.plot(epochs, train_mae_hist, label='Training MAE')
+    plt.plot(epochs, val_mae_hist, label='Validation MAE')
+    plt.title('Training and Validation MAE')
+    plt.xlabel('Epochs')
+    plt.ylabel('MAE')
+    plt.legend()
+
+    # Plot training and validation MAPE
+    plt.subplot(4, 1, 4)
+    plt.plot(epochs, train_mape_hist, label='Training MAPE')
+    plt.plot(epochs, val_mape_hist, label='Validation MAPE')
+    plt.title('Training and Validation MAPE')
+    plt.xlabel('Epochs')
+    plt.ylabel('MAPE')
+    plt.legend()
+
     plt.tight_layout()
     plt.savefig(save_path)
 
