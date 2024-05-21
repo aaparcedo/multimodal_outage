@@ -40,7 +40,7 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
   # Load dataset
   dataset = BlackMarbleDataset(dir_image, size=size, start_index=horizon)
 
-  print(f'size of dataset: {len(datataset)}')
+  print(f'size of dataset: {len(dataset)}')
 
   # Split into train / validation partitions
   n_test = int(len(dataset) * 0.1)
@@ -109,21 +109,24 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
         pbar.update(past_tensor.shape[0])    
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
-        print_memory_usage() 
 
     model.eval()
     val_loss = 0
-    
+    val_rmse = 0
+    val_mae = 0
+    val_mape = 0
+
     with torch.no_grad():
       for item in val_loader:
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
         preds_tensor = model(past_tensor)
+
         loss = criterion(preds_tensor, future_tensor)
-        val_loss += loss.item()
-        with torch.no_grad():
-          val_rmse_loss = rmse(preds_tensor, future_tensor)
-          val_mae_loss = mae(preds_tensor, future_tensor)
-          val_mape_loss = mape(preds_tensor, future_tensor)
+        val_rmse_loss = rmse(preds_tensor, future_tensor)
+        val_mae_loss = mae(preds_tensor, future_tensor)
+        val_mape_loss = mape(preds_tensor, future_tensor)
+       
+        val_loss += loss.item() 
         val_rmse += val_rmse_loss.item()
         val_mae += val_mae_loss.item()
         val_mape += val_mape_loss.item()
@@ -148,9 +151,11 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
     val_mae_hist.append(avg_val_mae_loss)
     val_mape_hist.append(avg_val_mape_loss)
 
-    print(f'Epoch {epoch + 1}, Loss (MSE): {avg_val_loss}, RMSE: {avg_val_rmse_loss}, MAPE: {avg_val_mape_loss}, MAE: {avg_val_mae_loss}')
+    print(f'Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
 
-  save_path = f'{args.job_id}_plot.png' 
+  save_file_name = f'{args.job_id}_plot.png' 
+
+  save_path = os.path.join('logs', save_file_name)
 
   plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist, 
     train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path) 
@@ -170,20 +175,18 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
-    parser.add_argument('--epochs', '-e', dest='epochs', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--batch-size', '-b', dest='batch_size', type=int, default=1, help='Batch size')
-    parser.add_argument('--horizon', 'h', dest='horizon', type=int, default=7, help='Timestep horizon')
-    parser.add_argument('--size', 's', dest='size', type='str', help='Dataset size/horizon')
-    parser.add_argument('--job_id', 'id', dest='job_id', type='str', help='Slurm job ID')
-    parser.add_argument('--device', 'd', dest='device', type='str', help='Select device, i.e., "cpu" or "cuda"')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
+    parser.add_argument('--batch-size', dest='batch_size', type=int, default=1, help='Batch size')
+    parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
+    parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
+    parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
+    parser.add_argument('--device', dest='device', type=str, default='cuda', help='Select device, i.e., "cpu" or "cuda"')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
   args = get_args()
-
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
   train_model(epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device)
 
