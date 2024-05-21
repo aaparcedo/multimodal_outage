@@ -49,7 +49,7 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
   train_set, val_set, test_set = random_split(dataset, [n_train, n_val, n_test], generator=torch.Generator().manual_seed(0))
 
   # Create data loaders
-  loader_args = dict(batch_size=batch_size, num_workers=4)
+  loader_args = dict(batch_size=batch_size, num_workers=2)
   train_loader = DataLoader(train_set, shuffle=True, **loader_args)
   val_loader = DataLoader(val_set, shuffle=True, **loader_args)
   test_loader = DataLoader(test_set, shuffle=True, **loader_args)
@@ -73,6 +73,8 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
   val_rmse_hist = []
   val_mape_hist = []
   val_mae_hist = []
+ 
+  best_val_loss = float('inf') 
 
   # Begin training
   for epoch in range(epochs):
@@ -151,10 +153,14 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
     val_mae_hist.append(avg_val_mae_loss)
     val_mape_hist.append(avg_val_mape_loss)
 
-    print(f'Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
+    print(f'Validation Metrics; Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
+
+    if val_loss < best_val_loss:
+      best_val_loss = val_loss
+      save_checkpoint(model, optimzer, epoch, f'{job_id}_checkpoint.pth')
+      print(f"New best validation loss: {best_val_loss}, model weights saved.")
 
   save_file_name = f'{args.job_id}_plot.png' 
-
   save_path = os.path.join('logs', save_file_name)
 
   plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist, 
@@ -162,22 +168,34 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
 
   model.eval()
   test_loss = 0
-
+  test_rmse = 0
+  test_mae = 0
+  test_mape = 0
   with torch.no_grad():
     for item in test_loader:
       past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
       preds_tensor = model(past_tensor)
       loss = criterion(preds_tensor, future_tensor)
+      test_rmse_loss = rmse(preds_tensor, future_tensor)
+      test_mae_loss = mae(preds_tensor, future_tensor)
+      test_mape_loss = mape(preds_tensor, future_tensor)
+      
       test_loss += loss.item()
+      test_rmse += val_rmse_loss.item()
+      test_mae += val_mae_loss.item()
+      test_mape += val_mape_loss.item()
 
   avg_test_loss = test_loss / len(test_loader)
-  print(f'Test Loss: {avg_test_loss:.4f}')
-
+  avg_test_rmse_loss = test_rmse / len(test_loader)
+  avg_test_mae_loss = test_mae / len(test_loader)
+  avg_test_mape_loss = test_mape / len(test_loader)
+  
+  print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--batch-size', dest='batch_size', type=int, default=1, help='Batch size')
+    parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
     parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
     parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
