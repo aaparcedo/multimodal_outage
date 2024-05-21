@@ -71,11 +71,11 @@ class BlackMarbleDataset(Dataset):
 def find_case_study_dates(size, image_paths):
   
   if size == 'S':
-    horizon = 45 # or 90 
+    horizon = 90 # or 90 
   elif size == 'M':
-    horizon = 90
-  elif size == 'L':
     horizon = 180
+  elif size == 'L':
+    horizon = 365
   else:
     print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
 
@@ -86,7 +86,7 @@ def find_case_study_dates(size, image_paths):
 
   case_study_indices = [dates.index(date) for date in case_study_dates.values()]
 
-  filtered_dates = []
+  filtered_dates = set()
 
   for case_study_index in case_study_indices:
     start_index = case_study_index - horizon
@@ -94,11 +94,31 @@ def find_case_study_dates(size, image_paths):
 
     case_study_dates = dates[start_index:end_index]
 
-    filtered_dates += case_study_dates
+    filtered_dates.update(case_study_dates)
 
-  filtered_image_paths = [timestamp_to_image[date] for date in filtered_dates]
+  filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
 
   return filtered_image_paths
+
+
+def mse_per_pixel(x, y):
+  squared_diff = (x - y) ** 2
+  total_mse = torch.mean(squared_diff)
+  return total_mse
+
+def rmse_per_pixel(x, y):
+  squared_diff = (x - y) ** 2
+  total_rmse = torch.sqrt(torch.mean(squared_diff))
+  return total_rmse
+
+def mae_per_pixel(x, y):
+  error = x - y
+  absolute_error = torch.abs(error)
+  total_mae = torch.mean(absolute_error)
+  return total_mae
+
+def mape_per_pixel(x, y, epsilon=1e-8):
+  return torch.mean(torch.abs((x - y) / (x + epsilon)))
 
 
 # Graph WaveNet utilities:
