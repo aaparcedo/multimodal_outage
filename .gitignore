@@ -4,4 +4,12 @@ Graph-WaveNet/
 find_normalization.py
 preprocess.py
 */download_logs/
+graph_unet/
 eda/download_broward.py
+*.jpeg
+*.png
+DCRNN/
+logs/
+test_bm_dataset.py
+test_model.py
+*.sh

@@ -71,7 +71,7 @@ class BlackMarbleDataset(Dataset):
 def find_case_study_dates(size, image_paths):
   
   if size == 'S':
-    horizon = 45 # or 90 
+    horizon = 90 # or 90 
   elif size == 'M':
     horizon = 180
   elif size == 'L':
@@ -82,11 +82,11 @@ def find_case_study_dates(size, image_paths):
   timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
   dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
   #case_study_dates = {'irma': pd.Timestamp('2017-09-10'), 'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
-  case_study_dates = {'ian': pd.Timestamp('2022-09-26')}
+  case_study_dates = {'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
 
   case_study_indices = [dates.index(date) for date in case_study_dates.values()]
 
-  filtered_dates = []
+  filtered_dates = set()
 
   for case_study_index in case_study_indices:
     start_index = case_study_index - horizon
@@ -94,11 +94,31 @@ def find_case_study_dates(size, image_paths):
 
     case_study_dates = dates[start_index:end_index]
 
-    filtered_dates += case_study_dates
+    filtered_dates.update(case_study_dates)
 
-  filtered_image_paths = [timestamp_to_image[date] for date in filtered_dates]
+  filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
 
   return filtered_image_paths
+
+
+def mse_per_pixel(x, y):
+  squared_diff = (x - y) ** 2
+  total_mse = torch.mean(squared_diff)
+  return total_mse
+
+def rmse_per_pixel(x, y):
+  squared_diff = (x - y) ** 2
+  total_rmse = torch.sqrt(torch.mean(squared_diff))
+  return total_rmse
+
+def mae_per_pixel(x, y):
+  error = x - y
+  absolute_error = torch.abs(error)
+  total_mae = torch.mean(absolute_error)
+  return total_mae
+
+def mape_per_pixel(x, y, epsilon=1e-8):
+  return torch.mean(torch.abs((x - y) / (x + epsilon)))
 
 
 # Graph WaveNet utilities:
@@ -134,30 +154,48 @@ def load_adj(filename, adjtype):
         return sensor_ids, sensor_id_to_ind, adj
 
 # End of Graph WaveNet utilities.
-
-def plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path):
+def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist,
+                          train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path):
     epochs = range(1, len(train_loss_hist) + 1)
-    
-    plt.figure(figsize=(12, 8))
-    
+
+    plt.figure(figsize=(14, 10))
+
     # Plot training and validation loss
-    plt.subplot(2, 1, 1)
+    plt.subplot(4, 1, 1)
     plt.plot(epochs, train_loss_hist, label='Training Loss')
     plt.plot(epochs, val_loss_hist, label='Validation Loss')
     plt.title('Training and Validation Loss')
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
-    
-    # Plot RMSE and MAPE
-    plt.subplot(2, 1, 2)
-    plt.plot(epochs, rmse_hist, label='RMSE')
-    plt.plot(epochs, mape_hist, label='MAPE')
-    plt.title('RMSE and MAPE')
+
+    # Plot training and validation RMSE
+    plt.subplot(4, 1, 2)
+    plt.plot(epochs, train_rmse_hist, label='Training RMSE')
+    plt.plot(epochs, val_rmse_hist, label='Validation RMSE')
+    plt.title('Training and Validation RMSE')
     plt.xlabel('Epochs')
-    plt.ylabel('Metrics')
+    plt.ylabel('RMSE')
     plt.legend()
-    
+
+    # Plot training and validation MAE
+    plt.subplot(4, 1, 3)
+    plt.plot(epochs, train_mae_hist, label='Training MAE')
+    plt.plot(epochs, val_mae_hist, label='Validation MAE')
+    plt.title('Training and Validation MAE')
+    plt.xlabel('Epochs')
+    plt.ylabel('MAE')
+    plt.legend()
+
+    # Plot training and validation MAPE
+    plt.subplot(4, 1, 4)
+    plt.plot(epochs, train_mape_hist, label='Training MAPE')
+    plt.plot(epochs, val_mape_hist, label='Validation MAPE')
+    plt.title('Training and Validation MAPE')
+    plt.xlabel('Epochs')
+    plt.ylabel('MAPE')
+    plt.legend()
+
     plt.tight_layout()
     plt.savefig(save_path)
 
