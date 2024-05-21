@@ -12,7 +12,8 @@ from models.unet  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-def train_model(epochs, batch_size, horizon, size,  device):
+
+def train_model(epochs, batch_size, horizon, size, job_id, device):
 
   randomadj = True
   adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
@@ -149,8 +150,10 @@ def train_model(epochs, batch_size, horizon, size,  device):
 
     print(f'Epoch {epoch + 1}, Loss (MSE): {avg_val_loss}, RMSE: {avg_val_rmse_loss}, MAPE: {avg_val_mape_loss}, MAE: {avg_val_mae_loss}')
 
-  save_path = 'training_history_plot.png' 
-  plot_training_history(train_loss_hist, val_loss_hist, rmse_hist, mape_hist, save_path)
+  save_path = f'{args.job_id}_plot.png' 
+
+  plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist, 
+    train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path) 
 
   model.eval()
   test_loss = 0
@@ -168,21 +171,19 @@ def train_model(epochs, batch_size, horizon, size,  device):
 
 def get_args():
     parser = argparse.ArgumentParser(description='Train the UNet on images and target masks')
-    parser.add_argument('--epochs', '-e', metavar='E', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--batch-size', '-b', dest='batch_size', metavar='B', type=int, default=1, help='Batch size')
-    parser.add_argument('--learning-rate', '-l', metavar='LR', type=float, default=1e-5,
-                        help='Learning rate', dest='lr')
-    parser.add_argument('--load', '-f', type=str, default=False, help='Load model from a .pth file')
-    parser.add_argument('--validation', '-v', dest='val', type=float, default=10.0,
-                        help='Percent of the data that is used as validation (0-100)')
-
+    parser.add_argument('--epochs', '-e', dest='epochs', type=int, default=5, help='Number of epochs')
+    parser.add_argument('--batch-size', '-b', dest='batch_size', type=int, default=1, help='Batch size')
+    parser.add_argument('--horizon', 'h', dest='horizon', type=int, default=7, help='Timestep horizon')
+    parser.add_argument('--size', 's', dest='size', type='str', help='Dataset size/horizon')
+    parser.add_argument('--job_id', 'id', dest='job_id', type='str', help='Slurm job ID')
+    parser.add_argument('--device', 'd', dest='device', type='str', help='Select device, i.e., "cpu" or "cuda"')
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-  #args = get_args()
+  args = get_args()
 
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   #train_model(model=model, epochs=args.epochs, batch_size=args.batch_size, learning_rate=args.lr, device=device, val_percent=args.val / 100)
-  train_model(epochs=20, batch_size=16, horizon=7, size='S', device=device)
+  train_model(epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device)
 
