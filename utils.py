@@ -199,6 +199,23 @@ def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_r
     plt.tight_layout()
     plt.savefig(save_path)
 
+def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
+    state = {
+        'epoch': epoch,
+        'state_dict': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+    }
+    torch.save(state, filename)
+    print(f"Checkpoint saved to {filename}")
+
+def load_checkpoint(model, optimizer, filename='checkpoint.pth.tar'):
+    checkpoint = torch.load(filename)
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    start_epoch = checkpoint['epoch']
+    print(f"Checkpoint loaded from {filename}, starting from epoch {start_epoch}")
+    return start_epoch
+
 def print_memory_usage():
     print(f"Allocated: {torch.cuda.memory_allocated() / 1e9} GB")
     print(f"Cached: {torch.cuda.memory_reserved() / 1e9} GB")
