@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class BlackMarbleDataset(Dataset):
-  def __init__(self, data_dir, size, start_index=7, transform=None):
+  def __init__(self, data_dir, size, start_index=7, transform=None, evaluation=False):
     self.data_dir = data_dir
     self.size = size
     self.start_index = start_index
@@ -20,7 +20,8 @@ class BlackMarbleDataset(Dataset):
       county: find_case_study_dates(
         size,
         sorted(os.listdir(os.path.join(data_dir, county)),
-          key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0])))
+          key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
+        evaluation=evaluation  
       ) for county in self.county_paths
     }
     
@@ -68,7 +69,7 @@ class BlackMarbleDataset(Dataset):
     return (past_image_tensor, future_image_tensor)
 
 
-def find_case_study_dates(size, image_paths):
+def find_case_study_dates(size, image_paths, evaluation):
   
   if size == 'S':
     horizon = 90 # or 90 
@@ -82,7 +83,11 @@ def find_case_study_dates(size, image_paths):
   timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
   dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
   #case_study_dates = {'irma': pd.Timestamp('2017-09-10'), 'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
-  case_study_dates = {'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
+
+  if evaluation:
+    case_study_dates = {'h_ian': pd.Timestamp('2022-09-26')}
+  else:
+    case_study_dates = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}
 
   case_study_indices = [dates.index(date) for date in case_study_dates.values()]
 
