@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class BlackMarbleDataset(Dataset):
-  def __init__(self, data_dir, size, start_index=7, transform=None, evaluation=False):
+  def __init__(self, data_dir, size, case_study, start_index=7, transform=None):
     self.data_dir = data_dir
     self.size = size
     self.start_index = start_index
@@ -21,7 +21,7 @@ class BlackMarbleDataset(Dataset):
         size,
         sorted(os.listdir(os.path.join(data_dir, county)),
           key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
-        evaluation=evaluation  
+        case_study=case_study  
       ) for county in self.county_paths
     }
     
@@ -69,27 +69,21 @@ class BlackMarbleDataset(Dataset):
     return (past_image_tensor, future_image_tensor)
 
 
-def find_case_study_dates(size, image_paths, evaluation):
+def find_case_study_dates(size, image_paths, case_study):
   
   if size == 'S':
-    horizon = 90 # or 90 
+    horizon = 30 # or 90 
   elif size == 'M':
-    horizon = 180
+    horizon = 60
   elif size == 'L':
-    horizon = 365
+    horizon = 90
   else:
     print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
 
   timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
   dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
-  #case_study_dates = {'irma': pd.Timestamp('2017-09-10'), 'michael': pd.Timestamp('2018-10-10'), 'ian': pd.Timestamp('2022-09-26')}
 
-  if evaluation:
-    case_study_dates = {'h_ian': pd.Timestamp('2022-09-26')}
-  else:
-    case_study_dates = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}
-
-  case_study_indices = [dates.index(date) for date in case_study_dates.values()]
+  case_study_indices = [dates.index(date) for date in case_study.values()]
 
   filtered_dates = set()
 
@@ -161,48 +155,45 @@ def load_adj(filename, adjtype):
 # End of Graph WaveNet utilities.
 def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist,
                           train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path):
-    epochs = range(1, len(train_loss_hist) + 1)
+  epochs = range(1, len(train_loss_hist) + 1)
 
-    plt.figure(figsize=(14, 10))
+  fig, axs = plt.subplots(2, 2, figsize=(12, 10))
 
-    # Plot training and validation loss
-    plt.subplot(4, 1, 1)
-    plt.plot(epochs, train_loss_hist, label='Training Loss')
-    plt.plot(epochs, val_loss_hist, label='Validation Loss')
-    plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
-    plt.ylabel('Loss')
-    plt.legend()
+  # Plot training and validation Loss
+  axs[0, 0].plot(epochs, train_loss_hist, label='Training Loss')
+  axs[0, 0].plot(epochs, val_loss_hist, label='Validation Loss')
+  axs[0, 0].set_title('Training and Validation Loss')
+  axs[0, 0].set_xlabel('Epochs')
+  axs[0, 0].set_ylabel('Loss')
+  axs[0, 0].legend()
 
-    # Plot training and validation RMSE
-    plt.subplot(4, 1, 2)
-    plt.plot(epochs, train_rmse_hist, label='Training RMSE')
-    plt.plot(epochs, val_rmse_hist, label='Validation RMSE')
-    plt.title('Training and Validation RMSE')
-    plt.xlabel('Epochs')
-    plt.ylabel('RMSE')
-    plt.legend()
+  # Plot training and validation RMSE
+  axs[0, 1].plot(epochs, train_rmse_hist, label='Training RMSE')
+  axs[0, 1].plot(epochs, val_rmse_hist, label='Validation RMSE')
+  axs[0, 1].set_title('Training and Validation RMSE')
+  axs[0, 1].set_xlabel('Epochs')
+  axs[0, 1].set_ylabel('RMSE')
+  axs[0, 1].legend()
 
-    # Plot training and validation MAE
-    plt.subplot(4, 1, 3)
-    plt.plot(epochs, train_mae_hist, label='Training MAE')
-    plt.plot(epochs, val_mae_hist, label='Validation MAE')
-    plt.title('Training and Validation MAE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAE')
-    plt.legend()
+  # Plot training and validation MAE
+  axs[1, 0].plot(epochs, train_mae_hist, label='Training MAE')
+  axs[1, 0].plot(epochs, val_mae_hist, label='Validation MAE')
+  axs[1, 0].set_title('Training and Validation MAE')
+  axs[1, 0].set_xlabel('Epochs')
+  axs[1, 0].set_ylabel('MAE')
+  axs[1, 0].legend()
 
-    # Plot training and validation MAPE
-    plt.subplot(4, 1, 4)
-    plt.plot(epochs, train_mape_hist, label='Training MAPE')
-    plt.plot(epochs, val_mape_hist, label='Validation MAPE')
-    plt.title('Training and Validation MAPE')
-    plt.xlabel('Epochs')
-    plt.ylabel('MAPE')
-    plt.legend()
+  # Plot training and validation MAPE
+  axs[1, 1].plot(epochs, train_mape_hist, label='Training MAPE')
+  axs[1, 1].plot(epochs, val_mape_hist, label='Validation MAPE')
+  axs[1, 1].set_title('Training and Validation MAPE')
+  axs[1, 1].set_xlabel('Epochs')
+  axs[1, 1].set_ylabel('MAPE')
+  axs[1, 1].legend()
 
-    plt.tight_layout()
-    plt.savefig(save_path)
+  plt.tight_layout()
+  plt.savefig(save_path)
+
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {
@@ -213,13 +204,16 @@ def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
     print(f"Checkpoint saved to {filename}")
 
-def load_checkpoint(model, optimizer, filename='checkpoint.pth.tar'):
-    checkpoint = torch.load(filename)
+
+def load_checkpoint(checkpoint_path, model, optimizer=None):
+    checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer'])
     start_epoch = checkpoint['epoch']
-    print(f"Checkpoint loaded from {filename}, starting from epoch {start_epoch}")
-    return start_epoch
+    print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
+    return model
+
 
 def print_memory_usage():
     print(f"Allocated: {torch.cuda.memory_allocated() / 1e9} GB")

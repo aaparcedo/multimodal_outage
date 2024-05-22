@@ -10,13 +10,13 @@ from models.unet  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-def test_model(epochs, batch_size, horizon, size, job_id, device):
+def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
   randomadj = True
   adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
   adjtype = "doubletransition"
 
-  sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)  
+  sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
   supports = [torch.tensor(i).to(device) for i in adj_mx]
 
   if randomadj:
@@ -24,9 +24,11 @@ def test_model(epochs, batch_size, horizon, size, job_id, device):
   else:
     adjinit = supports[0]
 
-  # should the model be the checkpoint
-  #model = Modified_UNET(supports).to(device=device)
-  model = load_checkpoint() # TODO: verify this works
+  ckpt_folder_path = os.path.join('logs', job_id)
+  ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
+
+  model = Modified_UNET(supports).to(device=device)
+  model = load_checkpoint(checkpoint_path, model)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -34,7 +36,8 @@ def test_model(epochs, batch_size, horizon, size, job_id, device):
   ])
 
   # Load dataset
-  dataset = BlackMarbleDataset(dir_image, size=size, start_index=horizon, transform=transform, evaluation=True)
+  if dataset is None:  
+    dataset = BlackMarbleDataset(dir_image, size=size, start_index=horizon, transform=transform, evaluation=True)
 
   print(f'size of dataset: {len(dataset)}')
 
@@ -65,16 +68,25 @@ def test_model(epochs, batch_size, horizon, size, job_id, device):
       test_mape_loss = mape(preds_tensor, future_tensor)
       
       test_loss += loss.item()
-      test_rmse += val_rmse_loss.item()
-      test_mae += val_mae_loss.item()
-      test_mape += val_mape_loss.item()
+      test_rmse += test_rmse_loss.item()
+      test_mae += test_mae_loss.item()
+      test_mape += test_mape_loss.item()
 
   avg_test_loss = test_loss / len(test_loader)
   avg_test_rmse_loss = test_rmse / len(test_loader)
   avg_test_mae_loss = test_mae / len(test_loader)
   avg_test_mape_loss = test_mape / len(test_loader)
   
+  test_metrics = {
+    'loss': avg_test_loss,
+    'rmse': avg_test_rmse_loss,
+    'mae': avg_test_mae_loss,
+    'mape': avg_test_mape_loss
+  }
+
   print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
+
+  return test_metrics  
 
 def get_args():
     parser = argparse.ArgumentParser()
