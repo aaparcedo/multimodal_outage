@@ -29,7 +29,7 @@ class BlackMarbleDataset(Dataset):
      return len(self.sorted_image_paths['orange'])
 
   def __iter__(self):
-      return iter(range(self.start_index, len(self.data_dir)))
+      return iter(range(self.start_index, len(self.data_dir) - self.start_index))
 
   def __getitem__(self, idx):
 
