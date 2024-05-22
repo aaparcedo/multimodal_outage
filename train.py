@@ -157,7 +157,7 @@ def train_model(epochs, batch_size, horizon, size, job_id, device):
 
     if val_loss < best_val_loss:
       best_val_loss = val_loss
-      save_checkpoint(model, optimzer, epoch, f'{job_id}_checkpoint.pth')
+      save_checkpoint(model, optimizer, epoch, f'{job_id}_checkpoint.pth')
       print(f"New best validation loss: {best_val_loss}, model weights saved.")
 
   save_file_name = f'{args.job_id}_plot.png' 
