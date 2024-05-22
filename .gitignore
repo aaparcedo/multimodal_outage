@@ -13,3 +13,4 @@ logs/
 test_bm_dataset.py
 test_model.py
 *.sh
+*.pth
