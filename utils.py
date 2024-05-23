@@ -72,7 +72,7 @@ class BlackMarbleDataset(Dataset):
 def find_case_study_dates(size, image_paths, case_study):
   
   if size == 'S':
-    horizon = 30 # or 90 
+    horizon = 20 # or 90 
   elif size == 'M':
     horizon = 60
   elif size == 'L':
@@ -194,7 +194,9 @@ def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_r
   plt.tight_layout()
   plt.savefig(save_path)
 
+
 def plot_error_metrics(runs_metrics, save_path):
+    
     metrics = ['val_loss', 'val_rmse', 'val_mae', 'val_mape']
     events = list(runs_metrics.keys())  # Extract event names from the provided dictionary
 

@@ -1,10 +1,11 @@
-from utils import BlackMarbleDataset, plot_training_history
+from utils import BlackMarbleDataset, plot_training_history, plot_error_metrics
 from train import train_model
 from test import test_model
 from torchvision import transforms
 import argparse
 import pandas as pd
 import os
+import numpy as np
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
@@ -21,7 +22,11 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
 
   case_study_events = [(train_ia_id, test_m), (train_m_id, test_ia), (train_ia_m, test_id)]
 
+  # val metrics
   runs_metrics = {}
+  
+  
+  overall_test_metrics = {'loss': [], 'rmse': [], 'mae': [], 'mape': []}
 
   for case_train, case_test in case_study_events:
  
@@ -53,23 +58,23 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
 
       save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_plot.png'
       save_folder_path = os.path.join(f'logs/{job_id}', 'figs')
-      save_path = os.path.join(save_folder_path, save_file_name)
+      run_save_path = os.path.join(save_folder_path, save_file_name)
       os.makedirs(save_folder_path, exist_ok=True)
 
       plot_training_history(train_metrics['train_loss'], train_metrics['val_loss'], \
         train_metrics['train_rmse'], train_metrics['val_rmse'], \
         train_metrics['train_mae'], train_metrics['val_mae'], \
-        train_metrics['train_mape'], train_metrics['val_mape'], save_path)
+        train_metrics['train_mape'], train_metrics['val_mape'], run_save_path)
       
       run_val_loss_hist.append(train_metrics['val_loss'])
       run_val_rmse_hist.append(train_metrics['val_rmse'])
       run_val_mae_hist.append(train_metrics['val_mae'])
       run_val_mape_hist.append(train_metrics['val_mape'])
 
-      run_loss_hist.append(test_metrics['loss'])
-      run_rmse_hist.append(test_metrics['rmse'])
-      run_mae_hist.append(test_metrics['mae'])
-      run_mape_hist.append(test_metrics['mape'])
+      run_test_loss_hist.append(test_metrics['loss'])
+      run_test_rmse_hist.append(test_metrics['rmse'])
+      run_test_mae_hist.append(test_metrics['mae'])
+      run_test_mape_hist.append(test_metrics['mape'])
 
       print(f'Run number: {run + 1}')
       print(train_metrics)
@@ -77,25 +82,45 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
       print(f"Test Loss: {test_metrics['loss']:.4f}, RMSE: {test_metrics['rmse']:.4f}, MAE: {test_metrics['mae']:.4f}, MAPE: {test_metrics['mape']:.4f}")
       print(f"\n=========================================================================================================================================\n")
 
-    run_avg_loss = sum(run_loss_hist) / len(run_loss_hist) 
-    run_avg_rmse = sum(run_rmse_hist) / len(run_rmse_hist)
-    run_avg_mae = sum(run_mae_hist) / len(run_mae_hist)
-    run_avg_mape = sum(run_mape_hist) / len(run_mape_hist)
+    run_avg_test_loss = sum(run_test_loss_hist) / len(run_test_loss_hist) 
+    run_avg_test_rmse = sum(run_test_rmse_hist) / len(run_test_rmse_hist)
+    run_avg_test_mae = sum(run_test_mae_hist) / len(run_test_mae_hist)
+    run_avg_test_mape = sum(run_test_mape_hist) / len(run_test_mape_hist)
+
+    overall_test_metrics['loss'].append(run_avg_test_loss)
+    overall_test_metrics['rmse'].append(run_avg_test_mae)
+    overall_test_metrics['mae'].append(run_avg_test_mae)
+    overall_test_metrics['mape'].append(run_avg_test_mape)
+
+    if test_h_name[0] not in runs_metrics:
+        runs_metrics[test_h_name[0]] = {}
 
     runs_metrics[test_h_name[0]]['val_loss'] = run_val_loss_hist
-    runs_metrics[test_h_name[0]]['rmse_loss'] = run_val_rmse_hist
-    runs_metrics[test_h_name[0]]['mae_loss'] = run_val_mae_hist
-    runs_metrics[test_h_name[0]]['mape_loss'] = run_val_mape_hist
+    runs_metrics[test_h_name[0]]['val_rmse'] = run_val_rmse_hist
+    runs_metrics[test_h_name[0]]['val_mae'] = run_val_mae_hist
+    runs_metrics[test_h_name[0]]['val_mape'] = run_val_mape_hist
 
     print(f'Average over {num_runs} runs: ')
-    print(f'Loss={run_avg_loss}, RMSE={run_avg_rmse}, MAE={run_avg_mae}, MAPE: {run_avg_mape}')
+    print(f'Loss={run_avg_test_loss}, RMSE={run_avg_test_rmse}, MAE={run_avg_test_mae}, MAPE: {run_avg_test_mape}')
     print(f"\n\n=========================================================================================================================================")
     print(f"=========================================================================================================================================\n\n")
     
-    experiment_save_path = 'case_study_metrics_over_runs.png'
+
+    
+    experiment_file_name = 'case_study_metrics_over_runs.png'
+    experiment_save_path = os.path.join(save_folder_path, experiment_file_name)
 
     # Plot the average of the num_runs here
     plot_error_metrics(runs_metrics, experiment_save_path)
+  
+  avg_loss = np.mean(overall_test_metrics['loss'])
+  avg_rmse = np.mean(overall_test_metrics['rmse'])
+  avg_mae = np.mean(overall_test_metrics['mae'])
+  avg_mape = np.mean(overall_test_metrics['mape'])
+  
+  print(f'Average case study test error over {args.num_runs} runs:')
+  print(f'Loss: {avg_loss}, RMSE: {avg_rmse}, MAE: {avg_mae}, MAPE: {avg_mape}')
+
 
 def get_args():
     parser = argparse.ArgumentParser()
