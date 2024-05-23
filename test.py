@@ -28,7 +28,7 @@ def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
   model = Modified_UNET(supports).to(device=device)
-  model = load_checkpoint(checkpoint_path, model)
+  model = load_checkpoint(ckpt_path, model)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor

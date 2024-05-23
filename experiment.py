@@ -19,8 +19,6 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
   train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
   train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
 
-  case_study_events = [(test_m, train_ia_id), (test_ia, train_m_id), (test_id, train_ia_m)]
-
   case_study_events = [(train_ia_id, test_m), (train_m_id, test_ia), (train_ia_m, test_id)]
 
   # Permute the 3 case studies
@@ -39,11 +37,12 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
       ckpt_run_save_file_name = f'trained_on_{h_names[0]}_{h_names[1]}_run{run}_ckpt.pth'
 
       train_metrics = train_model(epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=train_dataset)
-      test_metrics = test_model(epochs=epochs, batch_size=batch_size, horizon=horizon, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
+      test_metrics = test_model(epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
 
-      save_file_name = f'{args.job_id}_plot.png'
-      save_folder_path = os.path.join('logs', job_id)
+      save_file_name = f'trained_on_{h_names[0]}_{h_names[1]}_run{run}_plot.png'
+      save_folder_path = os.path.join('logs/figures', job_id)
       save_path = os.path.join(save_folder_path, save_file_name)
+      os.makedirs(save_folder_path, exist_ok=True)
 
       plot_training_history(train_metrics['train_loss'], train_metrics['val_loss'], \
         train_metrics['train_rmse'], train_metrics['val_rmse'], \
@@ -56,7 +55,8 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
       print(f"Test Loss: {test_metrics['loss']:.4f}, RMSE: {test_metrics['rmse']:.4f}, MAE: {test_metrics['mae']:.4f}, MAPE: {test_metrics['mape']:.4f}")
       print(f"=========================================================================================================================================")
       print(f"=========================================================================================================================================")
-
+    
+    # Plot the average of the num_runs here
 
 def get_args():
     parser = argparse.ArgumentParser()
