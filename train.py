@@ -153,14 +153,14 @@ def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt
 
     print(f'Validation Metrics; Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
 
-    chck_folder = os.path.join('logs/ckpts', job_id)
+    chck_folder = os.path.join(f'logs/{job_id}', ckpts)
     chck_save_path = os.path.join(chck_folder, ckpt_file_name)
     os.makedirs(chck_folder, exist_ok=True)
 
     if val_loss < best_val_loss:
       best_val_loss = val_loss
       save_checkpoint(model, optimizer, epoch, chck_save_path)
-      print(f"New best validation loss: {best_val_loss}, model weights saved.")
+      #print(f"New best validation loss: {best_val_loss}, model weights saved.")
   
   return train_val_metrics 
   

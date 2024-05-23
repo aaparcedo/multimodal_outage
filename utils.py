@@ -194,6 +194,24 @@ def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_r
   plt.tight_layout()
   plt.savefig(save_path)
 
+def plot_error_metrics(runs_metrics, save_path):
+    metrics = ['val_loss', 'val_rmse', 'val_mae', 'val_mape']
+    events = list(runs_metrics.keys())  # Extract event names from the provided dictionary
+
+    fig, axes = plt.subplots(4, 3, figsize=(15, 20))
+    fig.subplots_adjust(hspace=0.4, wspace=0.4)
+
+    for col, event in enumerate(events):
+        for row, metric in enumerate(metrics):
+            for run in range(len(runs_metrics[event][metric])):
+                axes[row, col].plot(runs_metrics[event][metric][run], label=f'Run {run+1}')
+            axes[row, col].set_title(f'{event} - {metric.upper()}')
+            axes[row, col].set_xlabel('Epoch')
+            axes[row, col].set_ylabel(metric.upper())
+            if row == 0:
+                axes[row, col].legend()
+
+    plt.savefig(save_path)
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {

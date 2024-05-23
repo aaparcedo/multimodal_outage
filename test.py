@@ -24,7 +24,7 @@ def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_
   else:
     adjinit = supports[0]
 
-  ckpt_folder_path = os.path.join('logs', job_id)
+  ckpt_folder_path = os.path.join(f'logs/{job_id}', 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
   model = Modified_UNET(supports).to(device=device)
@@ -84,7 +84,7 @@ def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_
     'mape': avg_test_mape_loss
   }
 
-  print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
+  #print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
 
   return test_metrics  
 
