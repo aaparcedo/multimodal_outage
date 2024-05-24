@@ -17,6 +17,21 @@ n_counties = 67
 n_timestep = 7 
 feature_vector_size = 16
 
+# Necessary for GWN:
+
+randomadj = True
+adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+adjtype = "doubletransition"
+
+sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
+default_supports = [torch.tensor(i).to(device) for i in adj_mx]
+
+if randomadj:
+  adjinit = None
+else:
+  adjinit = supports[0]
+
+
 # Graph WaveNet
 class nconv(nn.Module):
     def __init__(self):
@@ -59,7 +74,7 @@ class gcn(nn.Module):
         return h
 
 class gwnet(nn.Module):
-    def __init__(self, device, num_nodes, dropout=0.3, supports=None, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=2,out_dim=12,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
+    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
         super(gwnet, self).__init__()
         self.dropout = dropout
         self.blocks = blocks
@@ -77,7 +92,7 @@ class gwnet(nn.Module):
         self.start_conv = nn.Conv2d(in_channels=in_dim,
                                     out_channels=residual_channels,
                                     kernel_size=(1,1))
-        self.supports = supports
+        self.supports = default_supports
 
         receptive_field = 1
 

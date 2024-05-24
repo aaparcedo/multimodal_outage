@@ -15,110 +15,73 @@ dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
 def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-    randomadj = True
-    adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
-    adjtype = "doubletransition"
+  model = Modified_UNET().to(device=device)
 
-    sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata, adjtype)
-    supports = [torch.tensor(i).to(device) for i in adj_mx]
+  transform = transforms.Compose([
+    transforms.ToTensor(),          # Convert to tensor
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+  ])
 
-    if randomadj:
-        adjinit = None
-    else:
-        adjinit = supports[0]
+  print(f'device: {device}')
 
-    model = Modified_UNET(supports).to(device=device)
+  # Load dataset
+  
+  if dataset is None:
+    dataset = BlackMarbleDataset(dir_image, size=size, transform=transform, start_index=horizon)
 
-    transform = transforms.Compose([
-        transforms.ToTensor(),          # Convert to tensor
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
-                             0.229, 0.224, 0.225])
-    ])
+  print(f'size of dataset: {len(dataset)}')
 
-    print(f'device: {device}')
+  n_val = int(len(dataset) * 0.3)
+  n_train = len(dataset) - n_val
+  train_set, val_set= random_split(dataset, [n_train, n_val])
 
-    # Load dataset
+  # Create data loaders
+  loader_args = dict(batch_size=batch_size, num_workers=2)
+  train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+  val_loader = DataLoader(val_set, shuffle=True, **loader_args)
+  #test_loader = DataLoader(test_set, shuffle=True, **loader_args)
 
-    if dataset is None:
-        dataset = BlackMarbleDataset(
-            dir_image, size=size, transform=transform, start_index=horizon)
+  # Set up optimizer and custom loss function
+  optimizer = optim.Adam(model.parameters(), lr=0.001)
+  criterion = mse_per_pixel
+  
+  # Alternative Benchmarks
+  rmse = rmse_per_pixel
+  mae = mae_per_pixel
+  mape = mape_per_pixel
+ 
+  train_val_metrics = {
+    'train_loss': [],
+    'val_loss': [],
+    'train_rmse': [],
+    'val_rmse': [],
+    'train_mae': [],
+    'val_mae': [],
+    'train_mape': [],
+    'val_mape': []
+  }
 
-    print(f'size of dataset: {len(dataset)}')
+  best_val_loss = float('inf') 
 
-    n_val = int(len(dataset) * 0.3)
-    n_train = len(dataset) - n_val
-    train_set, val_set = random_split(dataset, [n_train, n_val])
+  # Begin training
+  for epoch in range(epochs):
+    model.train()
+    epoch_loss = 0
+    train_rmse = 0
+    train_mae = 0
+    train_mape = 0
+    
+    with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
+   
+      # item is a tensor of shape [67, 3, 128, 128]
+      for item in train_loader:
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        preds_tensor = model(past_tensor)
 
-    # Create data loaders
-    loader_args = dict(batch_size=batch_size, num_workers=2)
-    train_loader = DataLoader(train_set, shuffle=True, **loader_args)
-    val_loader = DataLoader(val_set, shuffle=True, **loader_args)
-    # test_loader = DataLoader(test_set, shuffle=True, **loader_args)
-
-    # Set up optimizer and custom loss function
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-    criterion = mse_per_pixel
-
-    # Alternative Benchmarks
-    rmse = rmse_per_pixel
-    mae = mae_per_pixel
-    mape = mape_per_pixel
-
-    train_val_metrics = {
-        'train_loss': [],
-        'val_loss': [],
-        'train_rmse': [],
-        'val_rmse': [],
-        'train_mae': [],
-        'val_mae': [],
-        'train_mape': [],
-        'val_mape': []
-    }
-
-    best_val_loss = float('inf')
-
-    # Begin training
-    for epoch in range(epochs):
-        model.train()
-        epoch_loss = 0
-        train_rmse = 0
-        train_mae = 0
-        train_mape = 0
-
-        with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
-
-            for item in train_loader:
-                past_tensor, future_tensor = (tensor.to(device).permute(
-                    0, 2, 1, 3, 4, 5) for tensor in item)
-                preds_tensor = model(past_tensor)
-
-                # pixel-wise MSE
-                loss = criterion(preds_tensor, future_tensor)
-
-                # pixel-wise RMSE, MAE & MAPE
-                with torch.no_grad():
-                    rmse_loss = rmse(preds_tensor, future_tensor)
-                    mae_loss = mae(preds_tensor, future_tensor)
-                    mape_loss = mape(preds_tensor, future_tensor)
-                train_rmse += rmse_loss.item()
-                train_mae += mae_loss.item()
-                train_mape += mape_loss.item()
-
-                optimizer.zero_grad()
-                loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
-
-                pbar.update(past_tensor.shape[0])
-                epoch_loss += loss.item()
-                pbar.set_postfix({'loss (batch)': loss.item()})
-
-        model.eval()
-        val_loss = 0
-        val_rmse = 0
-        val_mae = 0
-        val_mape = 0
-
+        # pixel-wise MSE 
+        loss = criterion(preds_tensor, future_tensor)
+        
+        # pixel-wise RMSE, MAE & MAPE
         with torch.no_grad():
             for item in val_loader:
                 past_tensor, future_tensor = (tensor.to(device).permute(

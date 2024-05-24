@@ -193,16 +193,25 @@ class Modified_UNET(nn.Module):
         self.expansion = Expansion(output_channels)
 
         # TODO: make dynamic
-        self.gwn = gwnet(device='cuda', num_nodes=67, dropout=0.3, supports=supports, in_dim=feature_vector_size, out_dim=feature_vector_size)
+        self.gwn = gwnet(device='cuda')
+
+        if st_gnn == 'gwnet':
+          self.st_gnn = gwnet(device='cuda')
+        elif st_gnn == 'dcrnn':
+          self.st_gnnn = dcrnn()
+        elif st_gnn == 'gman':
+          self.st_gnn = gman()
+        else:
+          print(f'Please select a valid spatiotemporal graph neural network.')
 
     def forward(self, input):
         result = []
         for batch in range(input.shape[0]):
             output = self.contraction(input[batch])
             output = self.encoder(output)
-            output = output.unsqueeze(0).permute(0, 3, 1, 2)
-            output = self.gwn(output)
-            output = output.squeeze(0).permute(1, 2, 0)
+            output = output.unsqueeze(0).permute(0, 3, 1, 2) # TODO: double check
+            output = self.st_gnn(output)
+            output = output.squeeze(0).permute(1, 2, 0) # TODO: double check
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps
             predicted_results = self.expansion(output, feature_maps)

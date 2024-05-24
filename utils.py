@@ -75,15 +75,20 @@ class BlackMarbleDataset(Dataset):
 
 
 def find_case_study_dates(size, image_paths, case_study):
-
-    if size == 'S':
-        horizon = 20  # or 90
-    elif size == 'M':
-        horizon = 60
-    elif size == 'L':
-        horizon = 90
-    else:
-        print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
+  if size == 'S':
+    horizon = 30 # or 90 
+  elif size == 'M':
+    horizon = 60
+  elif size == 'L':
+    horizon = 90
+  elif size == 'XL':
+    horizon = 120
+  elif size == 'XXL':
+    horizon = 150
+  elif size == 'XXXL':
+    horizon = 180
+  else:
+    print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
 
     timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace(
         '_', '-')): image_path for image_path in image_paths}
