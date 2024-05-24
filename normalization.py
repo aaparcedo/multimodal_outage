@@ -17,87 +17,78 @@ def load_images_for_dates(county_path, dates):
     return image_list
 
 
-def flatten_and_concatenate_images(images):
-    flattened_data = []
-    for img in images:
-        flattened_data.append(img.flatten())
-    return np.concatenate(flattened_data)
+def calculate_pixel_distributions(images):
+    # Stack images to create a 4D array (num_images, height, width, channels)
+    stacked_images = np.stack(images, axis=0)
+    return stacked_images
 
 
-def reshape_data_to_images(flattened_data, original_shapes):
-    reshaped_images = []
-    index = 0
-    for shape in original_shapes:
-        size = np.prod(shape)
-        reshaped_image = flattened_data[index:index + size].reshape(shape)
-        reshaped_images.append(reshaped_image)
-        index += size
-    return reshaped_images
+def get_distribution_statistics(distributions):
+    # Calculate mean and std for each pixel across all images
+    mean = np.mean(distributions, axis=0)
+    std = np.std(distributions, axis=0)
+    return mean, std
+
+
+def calculate_z_scores(distributions, mean, std):
+    # Calculate z-scores for each pixel value
+    z_scores = (distributions - mean) / std
+    return z_scores
+
+
+def plot_pixel_distribution(distributions, x, y, channel, bins=256):
+    # Extract the pixel values for the specific location and channel
+    pixel_values = distributions[:, y, x, channel]
+
+    # Plot the histogram
+    plt.hist(pixel_values, bins=bins, range=(0, 256), color='blue', alpha=0.7)
+    plt.title(f'Pixel Value Distribution at ({x}, {y}), Channel {channel}')
+    plt.xlabel('Pixel Value')
+    plt.ylabel('Frequency')
+    plt.show()
+
+
+def replace_with_z_scores(image, mean, std):
+    # Ensure the image has the same shape as mean and std
+    assert image.shape == mean.shape, "Target image dimensions must match the distribution dimensions"
+
+    # Calculate z-scores for the target image
+    z_scores = (image - mean) / std
+
+    # Normalize z-scores to 0-255 range for visualization (optional)
+    z_scores_normalized = 255 * \
+        (z_scores - z_scores.min()) / (z_scores.max() - z_scores.min())
+    z_scores_normalized = z_scores_normalized.astype(np.uint8)
+
+    return z_scores_normalized
 
 
 def normalize_and_transform_images(main_directory, root_directory, dates):
-    percent_normal_dir = os.path.join(root_directory, 'percent_normalized')
-    os.makedirs(percent_normal_dir, exist_ok=True)
+    for county in os.listdir(main_directory):
+        county_path = os.path.join(main_directory, county)
+        image_list = load_images_for_dates(county_path, dates)
+        distributions = calculate_pixel_distributions(image_list)
+        mean, std = get_distribution_statistics(distributions)
+        # Load the target image
+        target_image_path = 'path_to_target_image.jpg'
+        target_image = cv2.imread(target_image_path)
+        target_image = cv2.cvtColor(
+            target_image, cv2.COLOR_BGR2RGB)  # Convert to RGB
 
-    for county_dir in os.listdir(main_directory):
-        county_path = os.path.join(main_directory, county_dir)
-        if os.path.isdir(county_path):
-            images = load_images_for_dates(county_path, dates)
-            print("images loaded")
-            if not images:
-                continue
+        # Replace pixel values with z-scores
+        z_score_image = replace_with_z_scores(target_image, mean, std)
 
-            original_shapes = [img.shape for img in images]
-            flattened_data = flatten_and_concatenate_images(images)
-            mean = np.mean(flattened_data)
-            std = np.std(flattened_data)
-            standardized_data = (flattened_data - mean) / std
-            normal_dist_data = norm.ppf(norm.cdf(standardized_data))
-            min_val = np.min(normal_dist_data)
-            max_val = np.max(normal_dist_data)
-            scaled_data = 255 * (normal_dist_data -
-                                 min_val) / (max_val - min_val)
-            scaled_data = scaled_data.astype(np.uint8)
-            transformed_images = reshape_data_to_images(
-                scaled_data, original_shapes)
-
-            county_normalized_directory = os.path.join(
-                percent_normal_dir, county_dir)
-            print("making county dir")
-            os.makedirs(county_normalized_directory, exist_ok=True)
-
-            for i, img in enumerate(transformed_images):
-                transformed_image_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                transformed_image_path = os.path.join(
-                    county_normalized_directory, f'{dates[i]}.png')
-                cv2.imwrite(transformed_image_path, transformed_image_bgr)
-                print(f"Transformed image saved as {transformed_image_path}")
-
-            colors = ('r', 'g', 'b')
-            channel_ids = (0, 1, 2)
-
-            plt.figure(figsize=(20, 10))
-            for channel_id, color in zip(channel_ids, colors):
-                combined_channel_data = np.concatenate(
-                    [img[:, :, channel_id].flatten() for img in transformed_images])
-                histogram, bin_edges = np.histogram(
-                    combined_channel_data, bins=256, range=(0, 256))
-                plt.plot(bin_edges[0:-1], histogram, color=color)
-
-            plt.title(
-                f'Color Channel Histogram of Transformed Images for County {county_dir}')
-            plt.xlabel('Pixel Value')
-            plt.ylabel('Frequency')
-            plt.legend(['Red Channel', 'Green Channel', 'Blue Channel'])
-
-            transformed_histogram_output_path = os.path.join(
-                county_normalized_directory, 'transformed_color_histogram_combined.png')
-            plt.savefig(transformed_histogram_output_path,
-                        bbox_inches='tight', pad_inches=0)
-            plt.close()
-
-            print(f"Histogram plot of transformed images for county {
-                  county_dir} saved as {transformed_histogram_output_path}")
+        # Save and display the z-score image
+        # Convert back to BGR for saving with OpenCV
+        z_score_image_bgr = cv2.cvtColor(z_score_image, cv2.COLOR_RGB2BGR)
+        z_score_image_path = 'z_score_image.png'
+        cv2.imwrite(z_score_image_path, z_score_image_bgr)
+        print(f"Z-score image saved as {z_score_image_path}")
+        z_scores = calculate_z_scores(distributions, mean, std)
+        x, y, channel = 64, 64, 0
+        print(
+            f"Z-score for pixel at ({x}, {y}), Channel {channel}: {z_scores[:, y, x, channel]}")
+        plot_pixel_distribution(distributions, x=64, y=64, channel=0)
 
 
 def find_case_study_dates(size, image_paths, case_study):
