@@ -206,8 +206,6 @@ class Modified_UNET(nn.Module):
         super(Modified_UNET, self).__init__()
         self.contraction = Contraction(input_channels)
         self.encoder = Encoder()
-        self.decoder = Decoder()
-        self.expansion = Expansion(output_channels)
 
         if st_gnn == 'gwnet':
           self.st_gnn = gwnet(device='cuda')
@@ -217,6 +215,9 @@ class Modified_UNET(nn.Module):
           self.st_gnn = gman() # TODO: implement
         else:
           print(f'Please select a valid spatiotemporal graph neural network.')
+
+        self.decoder = Decoder()
+        self.expansion = Expansion(output_channels)
 
     def forward(self, input):
         result = []

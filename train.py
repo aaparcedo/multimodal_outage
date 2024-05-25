@@ -154,18 +154,12 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', dest='epochs', type=int,
-                        default=5, help='Number of epochs')
-    parser.add_argument('--batch_size', dest='batch_size',
-                        type=int, default=16, help='Batch size')
-    parser.add_argument('--horizon', dest='horizon', type=int,
-                        default=7, help='Timestep horizon')
-    parser.add_argument('--size', dest='size', type=str,
-                        default='S', help='Dataset size/horizon')
-    parser.add_argument('--job_id', dest='job_id', type=str,
-                        default='test', help='Slurm job ID')
-    parser.add_argument('--device', dest='device', type=str,
-                        default='cuda', help='Select device, i.e., "cpu" or "cuda"')
+    parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
+    parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
+    parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
+    parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
+    parser.add_argument('--device', dest='device', type=str, default='cuda', help='Select device, i.e., "cpu" or "cuda"')
     return parser.parse_args()
 
 

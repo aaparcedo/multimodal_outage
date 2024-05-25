@@ -27,7 +27,6 @@ class BlackMarbleDataset(Dataset):
             case_study=case_study  
           )  for county in self.county_paths
         }
-        print(f'image path for orange : {os.listdir(os.path.join(data_dir, "orange"))[50]}')
 
     def __len__(self):
         return len(self.sorted_image_paths['orange'])
@@ -284,9 +283,16 @@ def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     print(f"Checkpoint saved to {filename}")
 
 
+
 def load_checkpoint(checkpoint_path, model, optimizer=None):
     checkpoint = torch.load(checkpoint_path)
-    model.load_state_dict(checkpoint['state_dict'])
+    missing_keys, unexpected_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
+    
+    if missing_keys:
+        print(f"Missing keys: {missing_keys}")
+    if unexpected_keys:
+        print(f"Unexpected keys: {unexpected_keys}")
+    #model.load_state_dict(checkpoint['state_dict'],strict=False)
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer'])
     start_epoch = checkpoint['epoch']

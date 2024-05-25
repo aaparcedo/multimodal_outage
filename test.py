@@ -10,13 +10,14 @@ from models.unet  import Modified_UNET
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
+def test_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
   ckpt_folder_path = os.path.join(f'logs/{job_id}', 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
-  model = Modified_UNET().to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn).to(device=device)
   model = load_checkpoint(ckpt_path, model)
+
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -91,5 +92,5 @@ def get_args():
 if __name__ == '__main__':
   args = get_args()
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  test_model(epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device)
+  test_model(st_gnn=args.st_gn, epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device)
 
