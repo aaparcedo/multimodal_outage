@@ -63,6 +63,8 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
   best_val_loss = float('inf') 
 
+  print(f'range(epochs): {range(epochs)}')
+
   # Begin training
   for epoch in range(epochs):
     model.train()
@@ -70,17 +72,11 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_rmse = 0
     train_mae = 0
     train_mape = 0
-    
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
-   
       for item in train_loader:
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
         preds_tensor = model(past_tensor)
-        print_memory_usage()
-        # pixel-wise MSE 
         loss = criterion(preds_tensor, future_tensor)
-        
-        # pixel-wise RMSE, MAE & MAPE
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
           mae_loss = mae(preds_tensor, future_tensor)
@@ -98,58 +94,58 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
         epoch_loss += loss.item()
         pbar.set_postfix({'loss (batch)': loss.item()})
 
-        model.eval()
-        val_loss = 0
-        val_rmse = 0
-        val_mae = 0
-        val_mape = 0
+    model.eval()
+    val_loss = 0
+    val_rmse = 0
+    val_mae = 0
+    val_mape = 0
 
-        with torch.no_grad():
-            for item in val_loader:
-                past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
-                preds_tensor = model(past_tensor)
+    with torch.no_grad():
+      for item in val_loader:
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        preds_tensor = model(past_tensor)
 
-                loss = criterion(preds_tensor, future_tensor)
-                val_rmse_loss = rmse(preds_tensor, future_tensor)
-                val_mae_loss = mae(preds_tensor, future_tensor)
-                val_mape_loss = mape(preds_tensor, future_tensor)
+        loss = criterion(preds_tensor, future_tensor)
+        val_rmse_loss = rmse(preds_tensor, future_tensor)
+        val_mae_loss = mae(preds_tensor, future_tensor)
+        val_mape_loss = mape(preds_tensor, future_tensor)
 
-                val_loss += loss.item()
-                val_rmse += val_rmse_loss.item()
-                val_mae += val_mae_loss.item()
-                val_mape += val_mape_loss.item()
+        val_loss += loss.item()
+        val_rmse += val_rmse_loss.item()
+        val_mae += val_mae_loss.item()
+        val_mape += val_mape_loss.item()
 
-        avg_train_loss = epoch_loss / len(train_loader)
-        avg_train_rmse_loss = train_rmse / len(train_loader)
-        avg_train_mae_loss = train_mae / len(train_loader)
-        avg_train_mape_loss = train_mape / len(train_loader)
+    avg_train_loss = epoch_loss / len(train_loader)
+    avg_train_rmse_loss = train_rmse / len(train_loader)
+    avg_train_mae_loss = train_mae / len(train_loader)
+    avg_train_mape_loss = train_mape / len(train_loader)
 
-        avg_val_loss = val_loss / len(val_loader)
-        avg_val_rmse_loss = val_rmse / len(val_loader)
-        avg_val_mae_loss = val_mae / len(val_loader)
-        avg_val_mape_loss = val_mape / len(val_loader)
+    avg_val_loss = val_loss / len(val_loader)
+    avg_val_rmse_loss = val_rmse / len(val_loader)
+    avg_val_mae_loss = val_mae / len(val_loader)
+    avg_val_mape_loss = val_mape / len(val_loader)
 
-        train_val_metrics['train_loss'].append(avg_train_loss)
-        train_val_metrics['val_loss'].append(avg_val_loss)
-        train_val_metrics['train_rmse'].append(avg_train_rmse_loss)
-        train_val_metrics['val_rmse'].append(avg_val_rmse_loss)
-        train_val_metrics['train_mae'].append(avg_train_mae_loss)
-        train_val_metrics['val_mae'].append(avg_val_mae_loss)
-        train_val_metrics['train_mape'].append(avg_train_mape_loss)
-        train_val_metrics['val_mape'].append(avg_val_mape_loss)
+    train_val_metrics['train_loss'].append(avg_train_loss)
+    train_val_metrics['val_loss'].append(avg_val_loss)
+    train_val_metrics['train_rmse'].append(avg_train_rmse_loss)
+    train_val_metrics['val_rmse'].append(avg_val_rmse_loss)
+    train_val_metrics['train_mae'].append(avg_train_mae_loss)
+    train_val_metrics['val_mae'].append(avg_val_mae_loss)
+    train_val_metrics['train_mape'].append(avg_train_mape_loss)
+    train_val_metrics['val_mape'].append(avg_val_mape_loss)
 
-        print(f'Validation Metrics; Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
+    print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
 
-        chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
-        chck_save_path = os.path.join(chck_folder, ckpt_file_name)
-        os.makedirs(chck_folder, exist_ok=True)
+    chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
+    chck_save_path = os.path.join(chck_folder, ckpt_file_name)
+    os.makedirs(chck_folder, exist_ok=True)
 
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            save_checkpoint(model, optimizer, epoch, chck_save_path)
-            # print(f"New best validation loss: {best_val_loss}, model weights saved.")
+    if val_loss < best_val_loss:
+      best_val_loss = val_loss 
+      save_checkpoint(model, optimizer, epoch, chck_save_path)       
+     # print(f"New best validation loss: {best_val_loss}, model weights saved.")
 
-    return train_val_metrics
+  return train_val_metrics
 
 
 def get_args():
