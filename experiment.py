@@ -10,7 +10,7 @@ import pickle
 
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
+def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -65,8 +65,8 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
 
       ckpt_run_save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_ckpt.pth'
 
-      train_metrics = train_model(epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=train_dataset)
-      test_metrics = test_model(epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
+      train_metrics = train_model(st_gnn=st_gnn, epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=train_dataset)
+      test_metrics = test_model(st_gnn=st_gnn, epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
 
       save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_plot.png'
       save_folder_path = os.path.join(f'logs/{job_id}', 'figs')
@@ -160,6 +160,7 @@ def run_experiment(epochs, batch_size, horizon, size, job_id, num_runs, device):
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--st_gnn', dest='st_gnn', type=str, default='gwnet', help='Pick a st-gnn to train/test.')
     parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
     parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
@@ -173,4 +174,4 @@ def get_args():
 if __name__ == '__main__':
   args = get_args()
   print(args)
-  run_experiment(epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, num_runs=args.num_runs, device=args.device)
+  run_experiment(st_gnn=args.st_gnn, epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, num_runs=args.num_runs, device=args.device)

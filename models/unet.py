@@ -10,6 +10,23 @@ from PIL import Image
 import numpy as np
 
 from .graph_wavenet import gwnet
+from .dcrnn import DCRNNModel
+
+# DCRNN kwargs
+default_kwargs = {
+  'batch_size': 1,
+  'filter_type': 'dual_random_walk',
+  'horizon': 7,
+  'input_dim': 16,
+  'max_diffusion_step': 2,
+  'num_nodes': 67,
+  'num_rnn_layers': 2,
+  'output_dim': 16,
+  'rnn_units': 64,
+  'seq_len': 7,
+}
+
+# DCRNN kwargs above
 
 # Hyperparameters
 
@@ -185,22 +202,19 @@ class Expansion(nn.Module):
         return predictions
 
 class Modified_UNET(nn.Module):
-    def __init__(self,supports, input_channels=3, output_channels=3):
+    def __init__(self, st_gnn, input_channels=3, output_channels=3):
         super(Modified_UNET, self).__init__()
         self.contraction = Contraction(input_channels)
         self.encoder = Encoder()
         self.decoder = Decoder()
         self.expansion = Expansion(output_channels)
 
-        # TODO: make dynamic
-        self.gwn = gwnet(device='cuda')
-
         if st_gnn == 'gwnet':
           self.st_gnn = gwnet(device='cuda')
         elif st_gnn == 'dcrnn':
-          self.st_gnnn = dcrnn()
+          self.st_gnn = DCRNNModel(**default_kwargs).cuda()
         elif st_gnn == 'gman':
-          self.st_gnn = gman()
+          self.st_gnn = gman() # TODO: implement
         else:
           print(f'Please select a valid spatiotemporal graph neural network.')
 
@@ -209,9 +223,7 @@ class Modified_UNET(nn.Module):
         for batch in range(input.shape[0]):
             output = self.contraction(input[batch])
             output = self.encoder(output)
-            output = output.unsqueeze(0).permute(0, 3, 1, 2) # TODO: double check
             output = self.st_gnn(output)
-            output = output.squeeze(0).permute(1, 2, 0) # TODO: double check
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps
             predicted_results = self.expansion(output, feature_maps)

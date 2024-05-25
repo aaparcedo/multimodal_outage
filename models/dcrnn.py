@@ -16,6 +16,15 @@ kwargs = {
     'seq_len': 7,
 }
 
+randomadj = True
+adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+adjtype = "doubletransition"
+
+sensor_ids, sensor_id_to_ind, mx = load_adj(adjdata,adjtype)  
+mx = np.squeeze(np.array(mx))
+
+supports = [torch.tensor(i) for i in mx]
+
 class LayerParams:
     def __init__(self, rnn_network: torch.nn.Module, layer_type: str):
         self._rnn_network = rnn_network
@@ -79,6 +88,7 @@ class DCGRUCell(torch.nn.Module):
         self._supports = []
         self._use_gc_for_ru = use_gc_for_ru
         supports = []
+        adj_mx = np.array(adj_mx)
         if filter_type == "laplacian":
             supports.append(calculate_scaled_laplacian(adj_mx, lambda_max=None))
         elif filter_type == "random_walk":
@@ -121,7 +131,7 @@ class DCGRUCell(torch.nn.Module):
         r, u = torch.split(tensor=value, split_size_or_sections=self._num_units, dim=-1)
         r = torch.reshape(r, (-1, self._num_nodes * self._num_units))
         u = torch.reshape(u, (-1, self._num_nodes * self._num_units))
-
+        hx = hx.cuda()
         c = self._gconv(inputs, r * hx, self._num_units)
         if self._activation is not None:
             c = self._activation(c)
@@ -149,8 +159,8 @@ class DCGRUCell(torch.nn.Module):
     def _gconv(self, inputs, state, output_size, bias_start=0.0):
         # Reshape input and state to (batch_size, num_nodes, input_dim/state_dim)
         batch_size = inputs.shape[0]
-        inputs = torch.reshape(inputs, (batch_size, self._num_nodes, -1))
-        state = torch.reshape(state, (batch_size, self._num_nodes, -1))
+        inputs = torch.reshape(inputs, (batch_size, self._num_nodes, -1)).cuda()
+        state = torch.reshape(state, (batch_size, self._num_nodes, -1)).cuda()
         inputs_and_state = torch.cat([inputs, state], dim=2)
         input_size = inputs_and_state.size(2)
 
@@ -163,6 +173,7 @@ class DCGRUCell(torch.nn.Module):
             pass
         else:
             for support in self._supports:
+                support = support.cuda()
                 x1 = torch.sparse.mm(support, x0)
                 x = self._concat(x, x1)
 
@@ -176,10 +187,10 @@ class DCGRUCell(torch.nn.Module):
         x = x.permute(3, 1, 2, 0)  # (batch_size, num_nodes, input_size, order)
         x = torch.reshape(x, shape=[batch_size * self._num_nodes, input_size * num_matrices])
 
-        weights = self._gconv_params.get_weights((input_size * num_matrices, output_size))
+        weights = self._gconv_params.get_weights((input_size * num_matrices, output_size)).cuda()
         x = torch.matmul(x, weights)  # (batch_size * self._num_nodes, output_size)
 
-        biases = self._gconv_params.get_biases(output_size, bias_start)
+        biases = self._gconv_params.get_biases(output_size, bias_start).cuda()
         x += biases
         # Reshape res back to 2D: (batch_size, num_node, state_dim) -> (batch_size, num_node * state_dim)
         return torch.reshape(x, [batch_size, self._num_nodes * output_size])
@@ -253,11 +264,11 @@ class DecoderModel(nn.Module, Seq2SeqAttrs):
         return output, torch.stack(hidden_states)
     
 class DCRNNModel(nn.Module, Seq2SeqAttrs):
-    def __init__(self, adj_mx, **model_kwargs):
+    def __init__(self, adj_mx=supports, **model_kwargs):
         super().__init__()
         Seq2SeqAttrs.__init__(self, adj_mx, **model_kwargs)
-        self.encoder_model = EncoderModel(adj_mx, **model_kwargs)
-        self.decoder_model = DecoderModel(adj_mx, **model_kwargs)
+        self.encoder_model = EncoderModel(adj_mx, **model_kwargs).to('cuda')
+        self.decoder_model = DecoderModel(adj_mx, **model_kwargs).to('cuda')
         self.cl_decay_steps = int(model_kwargs.get('cl_decay_steps', 1000))
         self.use_curriculum_learning = bool(model_kwargs.get('use_curriculum_learning', False))
 
@@ -308,8 +319,10 @@ class DCRNNModel(nn.Module, Seq2SeqAttrs):
         :param batches_seen: batches seen till now
         :return: output: (self.horizon, batch_size, self.num_nodes * self.output_dim)
         """
+        inputs = inputs.view(7, 1, 1072) # specific for dcrnn
         encoder_hidden_state = self.encoder(inputs)
         outputs = self.decoder(encoder_hidden_state, labels, batches_seen=batches_seen)
+        outputs = outputs.view(67, 7, 16) # specific for our decoder
         return outputs
     
 # randomadj = True

@@ -8,6 +8,28 @@ import sys
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
+import pandas as pd
+
+def load_adj(filename, adjtype):
+
+    # Load the adjacency matrix from csv file
+
+    if (filename.endswith('.csv')):
+        adj_mx = pd.read_csv(filename, index_col=0)
+        adj_mx = adj_mx.values
+    else:
+        sensor_ids, sensor_id_to_ind, adj_mx = load_pickle(filename)
+
+    if adjtype == "doubletransition":
+        adj = [np.diag(np.ones(adj_mx.shape[0])).astype(np.float32)]
+    else:
+        error = 0
+        assert error, "adj type not defined"
+
+    if (filename.endswith('.csv')):
+        return None, None, adj
+    else:
+        return sensor_ids, sensor_id_to_ind, adj
 
 # Hyperparameters
 
@@ -24,7 +46,7 @@ adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
 adjtype = "doubletransition"
 
 sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
-default_supports = [torch.tensor(i).to(device) for i in adj_mx]
+default_supports = [torch.tensor(i).to('cuda') for i in adj_mx]
 
 if randomadj:
   adjinit = None
@@ -161,6 +183,8 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
+        input = input.view(1, 16, 67, 7)
+
         in_len = input.size(2)
         if in_len<self.receptive_field:
             x = nn.functional.pad(input,(self.receptive_field-in_len,0,0,0))
@@ -225,5 +249,6 @@ class gwnet(nn.Module):
         x = F.relu(skip)
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
+        x = x.view(67, 7, 16)
         return x
 

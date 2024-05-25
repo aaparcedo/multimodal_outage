@@ -13,9 +13,9 @@ from models.unet import Modified_UNET
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
 
-def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
+def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-  model = Modified_UNET().to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn).to(device=device)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -29,7 +29,7 @@ def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt
   if dataset is None:
     dataset = BlackMarbleDataset(dir_image, size=size, transform=transform, start_index=horizon)
 
-  print(f'size of dataset: {len(dataset)}')
+  #print(f'size of train dataset: {len(dataset)}')
 
   n_val = int(len(dataset) * 0.3)
   n_train = len(dataset) - n_val
@@ -73,19 +73,40 @@ def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt
     
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
    
-      # item is a tensor of shape [67, 3, 128, 128]
       for item in train_loader:
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
         preds_tensor = model(past_tensor)
-
+        print_memory_usage()
         # pixel-wise MSE 
         loss = criterion(preds_tensor, future_tensor)
         
         # pixel-wise RMSE, MAE & MAPE
         with torch.no_grad():
+          rmse_loss = rmse(preds_tensor, future_tensor)
+          mae_loss = mae(preds_tensor, future_tensor)
+          mape_loss = mape(preds_tensor, future_tensor)        
+        train_rmse += rmse_loss.item()
+        train_mae += mae_loss.item()
+        train_mape += mape_loss.item()
+
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+
+        pbar.update(past_tensor.shape[0])    
+        epoch_loss += loss.item()
+        pbar.set_postfix({'loss (batch)': loss.item()})
+
+        model.eval()
+        val_loss = 0
+        val_rmse = 0
+        val_mae = 0
+        val_mape = 0
+
+        with torch.no_grad():
             for item in val_loader:
-                past_tensor, future_tensor = (tensor.to(device).permute(
-                    0, 2, 1, 3, 4, 5) for tensor in item)
+                past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
                 preds_tensor = model(past_tensor)
 
                 loss = criterion(preds_tensor, future_tensor)
@@ -117,8 +138,7 @@ def train_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt
         train_val_metrics['train_mape'].append(avg_train_mape_loss)
         train_val_metrics['val_mape'].append(avg_val_mape_loss)
 
-        print(f'Validation Metrics; Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {
-              avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
+        print(f'Validation Metrics; Epoch {epoch + 1}, Loss (MSE): {avg_val_loss:.4f}, RMSE: {avg_val_rmse_loss:.4f}, MAPE: {avg_val_mape_loss:.4f}, MAE: {avg_val_mae_loss:.4f}')
 
         chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
         chck_save_path = os.path.join(chck_folder, ckpt_file_name)

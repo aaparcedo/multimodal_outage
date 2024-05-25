@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
-from normalization import normalize_and_transform_images
+#from normalization import normalize_and_transform_images
 
 
 class BlackMarbleDataset(Dataset):
@@ -18,16 +18,16 @@ class BlackMarbleDataset(Dataset):
         self.start_index = start_index
         self.county_paths = os.listdir(data_dir)
         self.transform = transform if transform is not None else transforms.ToTensor()
-
         # Sorting each county's images by date
         self.sorted_image_paths = {
-            county: find_case_study_dates(
-                size,
-                sorted(os.listdir(os.path.join(data_dir, county)),
-                       key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
-                case_study=case_study
-            ) for county in self.county_paths
+          county: find_case_study_dates(
+            size,
+            sorted(os.listdir(os.path.join(data_dir, county)),
+              key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
+            case_study=case_study  
+          )  for county in self.county_paths
         }
+        print(f'image path for orange : {os.listdir(os.path.join(data_dir, "orange"))[50]}')
 
     def __len__(self):
         return len(self.sorted_image_paths['orange'])
@@ -36,7 +36,6 @@ class BlackMarbleDataset(Dataset):
         return iter(range(self.start_index, len(self.data_dir) - self.start_index))
 
     def __getitem__(self, idx):
-
         past_image_list = []
         future_image_list = []
 
@@ -75,28 +74,24 @@ class BlackMarbleDataset(Dataset):
 
 
 def find_case_study_dates(size, image_paths, case_study):
-  if size == 'S':
-    horizon = 30 # or 90 
-  elif size == 'M':
-    horizon = 60
-  elif size == 'L':
-    horizon = 90
-  elif size == 'XL':
-    horizon = 120
-  elif size == 'XXL':
-    horizon = 150
-  elif size == 'XXXL':
-    horizon = 180
-  else:
-    print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
+    if size == 'S':
+      horizon = 30 # or 90 
+    elif size == 'M':
+      horizon = 60
+    elif size == 'L':
+      horizon = 90
+    elif size == 'XL':
+      horizon = 120
+    elif size == 'XXL':
+      horizon = 150
+    elif size == 'XXXL':
+      horizon = 180
+    else:
+      print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
 
-    timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace(
-        '_', '-')): image_path for image_path in image_paths}
-    dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-'))
-             for image_path in image_paths]
-
+    timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
+    dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
     case_study_indices = [dates.index(date) for date in case_study.values()]
-
     filtered_dates = set()
     main_directory = '/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal'
 
@@ -105,14 +100,12 @@ def find_case_study_dates(size, image_paths, case_study):
         end_index = case_study_index + horizon
 
         case_study_dates = dates[start_index:end_index]
-        case_study_subset = dates[start_index:case_study_index]
-        normalize_and_transform_images(
-            main_directory=main_directory, dates=case_study_subset)
+#        case_study_subset = dates[start_index:case_study_index]
+#        normalize_and_transform_images(
+#            main_directory=main_directory, dates=case_study_subset)
 
         filtered_dates.update(case_study_dates)
-
-    filtered_image_paths = [timestamp_to_image[date]
-                            for date in sorted(filtered_dates)]
+    filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
     return filtered_image_paths
 
 
@@ -297,8 +290,7 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer'])
     start_epoch = checkpoint['epoch']
-    print(f"Checkpoint loaded from {
-          checkpoint_path}, starting from epoch {start_epoch}")
+    print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
     return model
 
 

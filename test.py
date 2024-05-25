@@ -12,22 +12,10 @@ dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
 def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-  randomadj = True
-  adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
-  adjtype = "doubletransition"
-
-  sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
-  supports = [torch.tensor(i).to(device) for i in adj_mx]
-
-  if randomadj:
-    adjinit = None
-  else:
-    adjinit = supports[0]
-
   ckpt_folder_path = os.path.join(f'logs/{job_id}', 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
-  model = Modified_UNET(supports).to(device=device)
+  model = Modified_UNET().to(device=device)
   model = load_checkpoint(ckpt_path, model)
 
   transform = transforms.Compose([
@@ -39,7 +27,7 @@ def test_model(epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_
   if dataset is None:  
     dataset = BlackMarbleDataset(dir_image, size=size, start_index=horizon, transform=transform, evaluation=True)
 
-  print(f'size of dataset: {len(dataset)}')
+  print(f'size of test dataset: {len(dataset)}')
 
   # Create data loaders
   loader_args = dict(batch_size=batch_size, num_workers=2)
