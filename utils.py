@@ -280,7 +280,7 @@ def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
         'optimizer': optimizer.state_dict(),
     }
     torch.save(state, filename)
-    print(f"Checkpoint saved to {filename}")
+    #print(f"Checkpoint saved to {filename}")
 
 
 
@@ -290,8 +290,8 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     
     if missing_keys:
         print(f"Missing keys: {missing_keys}")
-    if unexpected_keys:
-        print(f"Unexpected keys: {unexpected_keys}")
+    #if unexpected_keys:
+        #print(f"Unexpected keys: {unexpected_keys}")
     #model.load_state_dict(checkpoint['state_dict'],strict=False)
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer'])
