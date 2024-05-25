@@ -63,6 +63,8 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
     # Repeat the same experiment 3 times
     for run in range(num_runs):
 
+      print(f'Starting run number {run + 1}. Training on {train_h_names[0]} and {train_h_names[1]}.')
+
       ckpt_run_save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_ckpt.pth'
 
       train_metrics = train_model(st_gnn=st_gnn, epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=train_dataset)
@@ -93,10 +95,10 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
       run_test_mae_hist.append(test_metrics['mae'])
       run_test_mape_hist.append(test_metrics['mape'])
 
-      print(f'Run number: {run + 1}')
       print(train_metrics)
       print(test_metrics)
       print(f"Test Loss: {test_metrics['loss']:.4f}, RMSE: {test_metrics['rmse']:.4f}, MAE: {test_metrics['mae']:.4f}, MAPE: {test_metrics['mape']:.4f}")
+      print(f'End of run number {run + 1}. Trained on {train_h_names[0]} and {train_h_names[1]}.')
       print(f"\n=========================================================================================================================================\n")
 
     run_avg_test_loss = sum(run_test_loss_hist) / len(run_test_loss_hist) 
