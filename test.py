@@ -4,20 +4,20 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 import os
 import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
 from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint
 from models.unet  import Modified_UNET
 
-
 dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-def test_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
+def test_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None, visualize=True):
 
   ckpt_folder_path = os.path.join(f'logs/{job_id}', 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
   model = Modified_UNET(st_gnn=st_gnn).to(device=device)
   model = load_checkpoint(ckpt_path, model)
-
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -47,6 +47,7 @@ def test_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_
   test_rmse = 0
   test_mae = 0
   test_mape = 0
+  
   with torch.no_grad():
     for item in test_loader:
       past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
@@ -72,6 +73,26 @@ def test_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_
     'mae': avg_test_mae_loss,
     'mape': avg_test_mape_loss
   }
+  
+  if (visualize == True): 
+    # TODO: need the correct directoy to save to.
+    save_dir = ''
+    batch, county, timestep, _, _ =  preds_tensor.shape
+    # TODO: start_date -> need the start date at each batch to save accordingly.
+    start_date = ''
+    for b in batch: 
+      for c in county: 
+        for t in timestep: 
+          numpy_array = preds_tensor[b, c, t].numpy()
+          image = np.transpose(numpy_array, (1, 2, 0))
+          plt.imshow(image)
+          plt.axis('off')
+          
+          #TODO: current_date -> need to figure out how to add a date to my start date.
+          current_date = '' 
+          filename = os.path.join(save_dir, f"image_batch{b}_county{c}_timestep{t}.jpeg")
+          filename = f"{current_date}.jpeg"
+          plt.savefig(filename, format='jpeg', bbox_inches='tight', pad_inches=0)
 
   #print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
 
