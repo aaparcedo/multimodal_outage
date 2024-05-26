@@ -8,7 +8,10 @@ import os
 import numpy as np
 import pickle
 
-dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
+pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+
+dir_image = ntl_dir
 
 def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
 
@@ -68,7 +71,7 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
       ckpt_run_save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_ckpt.pth'
 
       train_metrics = train_model(st_gnn=st_gnn, epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=train_dataset)
-      test_metrics = test_model(st_gnn=st_gnn, epochs=epochs, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
+      test_metrics = test_model(st_gnn=st_gnn, batch_size=batch_size, horizon=horizon, job_id=job_id, ckpt_file_name=ckpt_run_save_file_name, device=device, dataset=test_dataset)
 
       save_file_name = f'trained_on_{train_h_names[0]}_{train_h_names[1]}_run{run}_plot.png'
       save_folder_path = os.path.join(f'logs/{job_id}', 'figs')

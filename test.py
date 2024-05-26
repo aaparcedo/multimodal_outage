@@ -11,15 +11,21 @@ from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
 
-dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
+pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+
+
+dir_image = ntl_dir
 
 train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
 train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
 train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
 
-def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
+def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None, visualize=False):
 
-  ckpt_folder_path = os.path.join(f'logs/{job_id}', 'ckpts')
+  job_id_folder_path = os.path.join('logs', job_id)
+
+  ckpt_folder_path = os.path.join(job_id_folder_path, 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
   model = Modified_UNET(st_gnn=st_gnn).to(device=device)
@@ -85,31 +91,15 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
     'mae': avg_test_mae_loss,
     'mape': avg_test_mape_loss
   }
-  
-  if (visualize == True): 
-    # TODO: need the correct directoy to save to.
-    save_dir = ''
-    batch, county, timestep, _, _ =  preds_tensor.shape
-    # TODO: start_date -> need the start date at each batch to save accordingly.
-    start_date = ''
-    for b in batch: 
-      for c in county: 
-        for t in timestep: 
-          numpy_array = preds_tensor[b, c, t].numpy()
-          image = np.transpose(numpy_array, (1, 2, 0))
-          plt.imshow(image)
-          plt.axis('off')
-          
-          #TODO: current_date -> need to figure out how to add a date to my start date.
-          current_date = '' 
-          filename = os.path.join(save_dir, f"image_batch{b}_county{c}_timestep{t}.jpeg")
-          filename = f"{current_date}.jpeg"
-          plt.savefig(filename, format='jpeg', bbox_inches='tight', pad_inches=0)
 
   #print(f'Test Results; Loss (MSE): {avg_test_loss:.4f}, RMSE: {avg_test_rmse_loss:.4f}, MAPE: {avg_test_mape_loss:.4f}, MAE: {avg_test_mae_loss:.4f}')
 
   preds = torch.cat(preds, dim=0)
   reals = torch.cat(real, dim=0) 
+
+  if visualize:
+    find_case_study_dates
+    visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
   h_mae_hist = []

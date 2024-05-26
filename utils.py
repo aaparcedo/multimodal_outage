@@ -92,16 +92,12 @@ def find_case_study_dates(size, image_paths, case_study):
     dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
     case_study_indices = [dates.index(date) for date in case_study.values()]
     filtered_dates = set()
-    main_directory = '/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal'
 
     for case_study_index in case_study_indices:
         start_index = case_study_index - horizon
         end_index = case_study_index + horizon
 
         case_study_dates = dates[start_index:end_index]
-#        case_study_subset = dates[start_index:case_study_index]
-#        normalize_and_transform_images(
-#            main_directory=main_directory, dates=case_study_subset)
 
         filtered_dates.update(case_study_dates)
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
@@ -250,28 +246,66 @@ def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_r
     plt.savefig(save_path)
 
 
+
 def plot_error_metrics(runs_metrics, save_path):
-
     metrics = ['val_loss', 'val_rmse', 'val_mae', 'val_mape']
-    # Extract event names from the provided dictionary
     events = list(runs_metrics.keys())
-
+    
+    # Calculate vmin and vmax for each metric
+    metric_min_max = {}
+    for metric in metrics:
+        all_values = []
+        for event in events:
+            for run_data in runs_metrics[event][metric]:
+                all_values.extend(run_data)
+        metric_min_max[metric] = (min(all_values), max(all_values))
+    
     fig, axes = plt.subplots(4, 3, figsize=(15, 20))
     fig.subplots_adjust(hspace=0.4, wspace=0.4)
-
+    
     for col, event in enumerate(events):
         for row, metric in enumerate(metrics):
             for run in range(len(runs_metrics[event][metric])):
-                axes[row, col].plot(runs_metrics[event]
-                                    [metric][run], label=f'Run {run+1}')
+                axes[row, col].plot(runs_metrics[event][metric][run], label=f'Run {run+1}')
             axes[row, col].set_title(f'{event} - {metric.upper()}')
             axes[row, col].set_xlabel('Epoch')
             axes[row, col].set_ylabel(metric.upper())
+            axes[row, col].set_ylim(metric_min_max[metric])  # Set the same vmin and vmax for the metric
             if row == 0:
                 axes[row, col].legend()
 
     plt.savefig(save_path)
 
+def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
+  """
+  Save image results from modified unet predictions.
+
+  Parameters:
+  - preds (torch.Tensor): output predictions from modified unet model
+  - save_dir (str): directory of to save images
+  - dataset_dir (str): directory of dataset images
+  - dataset (BlackMarbleDataset): dataset object  
+
+  Returns:
+  - N/A
+  """
+
+  county_names = sorted(os.listdir(dataset_dir))
+  preds_save_dir = os.path.join(save_dir, 'test_preds') # /logs/job_id/test_preds/
+  os.makedirs(preds_save_dir, exist_ok=True)
+ 
+  for pred_idx in range(preds.shape[0]):
+    for horizon in range(preds.shape[2]):
+      horizon_folder_path = os.path.join(preds_save_dir, str(horizon)) # /logs/job_id/test_preds/horizon/
+      os.makedirs(horizon_folder_path, exist_ok=True)
+      for county_idx in range(preds.shape[1]):
+        county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx]) # /logs/job_id/test_preds/horizon/county/
+        os.makedirs(county_horizon_folder_path, exist_ok=True)
+
+        image_save_path = os.path.join(county_horizon_folder_path, dataset.sorted_image_paths[pred_idx])
+        image_np = preds[pred_idx, county_idx, horizon].permute(1, 2, 0).numpy().astype(np.uint8)  # Convert tensor to numpy array
+        image = Image.fromarray(image_np)
+        image.save(image_save_path)
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {
@@ -288,8 +322,8 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     checkpoint = torch.load(checkpoint_path)
     missing_keys, unexpected_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
     
-    if missing_keys:
-        print(f"Missing keys: {missing_keys}")
+    #if missing_keys:
+    #    print(f"Missing keys: {missing_keys}")
     #if unexpected_keys:
         #print(f"Unexpected keys: {unexpected_keys}")
     #model.load_state_dict(checkpoint['state_dict'],strict=False)
