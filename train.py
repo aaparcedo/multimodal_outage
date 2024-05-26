@@ -19,7 +19,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
   ])
 
   print(f'device: {device}')
@@ -62,8 +62,6 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   }
 
   best_val_loss = float('inf') 
-
-  print(f'range(epochs): {range(epochs)}')
 
   # Begin training
   for epoch in range(epochs):

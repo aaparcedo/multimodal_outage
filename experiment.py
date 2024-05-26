@@ -135,8 +135,6 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
     print(f"\n\n=========================================================================================================================================")
     print(f"=========================================================================================================================================\n\n")
     
-
-    
     experiment_file_name = 'case_study_metrics_over_runs.png'
     experiment_save_path = os.path.join(save_folder_path, experiment_file_name)
 

@@ -104,6 +104,13 @@ def find_case_study_dates(size, image_paths, case_study):
     return filtered_image_paths
 
 
+def denormalize(tensor):
+  
+  mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).cuda()
+  std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).cuda()
+  
+  return tensor * std + mean
+
 def mse_per_pixel(x, y):
     squared_diff = (x - y) ** 2
     total_mse = torch.mean(squared_diff)
@@ -293,7 +300,6 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
   county_names = sorted(os.listdir(dataset_dir))
   preds_save_dir = os.path.join(save_dir, 'test_preds') # /logs/job_id/test_preds/
   os.makedirs(preds_save_dir, exist_ok=True)
- 
   for pred_idx in range(preds.shape[0]):
     for horizon in range(preds.shape[2]):
       horizon_folder_path = os.path.join(preds_save_dir, str(horizon)) # /logs/job_id/test_preds/horizon/
@@ -302,8 +308,8 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
         county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx]) # /logs/job_id/test_preds/horizon/county/
         os.makedirs(county_horizon_folder_path, exist_ok=True)
 
-        image_save_path = os.path.join(county_horizon_folder_path, dataset.sorted_image_paths[pred_idx])
-        image_np = preds[pred_idx, county_idx, horizon].permute(1, 2, 0).numpy().astype(np.uint8)  # Convert tensor to numpy array
+        image_save_path = os.path.join(county_horizon_folder_path, dataset.sorted_image_paths[county_names[county_idx]][pred_idx])
+        image_np = denormalize(preds[pred_idx, county_idx, horizon]).permute(1, 2, 0).cpu().numpy().astype(np.uint8)  # Convert tensor to numpy array
         image = Image.fromarray(image_np)
         image.save(image_save_path)
 
@@ -332,7 +338,6 @@ def load_checkpoint(checkpoint_path, model, optimizer=None):
     start_epoch = checkpoint['epoch']
     print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
     return model
-
 
 def print_memory_usage():
     print(f"Allocated: {torch.cuda.memory_allocated() / 1e9} GB")

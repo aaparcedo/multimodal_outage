@@ -6,7 +6,7 @@ import os
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint
+from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results
 from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
@@ -33,7 +33,7 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
   ])
 
   # Load dataset
@@ -98,7 +98,6 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   reals = torch.cat(real, dim=0) 
 
   if visualize:
-    find_case_study_dates
     visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
@@ -136,6 +135,7 @@ def get_args():
     parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
     parser.add_argument('--device', dest='device', type=str, default='cuda', help='Select device, i.e., "cpu" or "cuda"')
     parser.add_argument('--checkpoint_path', dest='ckpt_path', type=str, help='Model checkpoint path to test')
+    parser.add_argument('--visualize', dest='visualize', action='store_true', help='Boolean flag to visualize test results (default: False)')
 
     return parser.parse_args()
 
@@ -144,5 +144,5 @@ if __name__ == '__main__':
   args = get_args()
   print(f'\nargs: {args}\n')
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-  test_model(st_gnn=args.st_gnn, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device, ckpt_file_name=args.ckpt_path)
+  test_model(st_gnn=args.st_gnn, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device, ckpt_file_name=args.ckpt_path, visualize=args.visualize)
 
