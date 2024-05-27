@@ -30,9 +30,9 @@ default_kwargs = {
 
 # Hyperparameters
 
-image_dimension = 128
+image_dimension = 256
 batch_size = 4
-n_counties = 67
+n_counties = 65
 n_timestep = 7
 feature_vector_size = 16
 
@@ -208,7 +208,7 @@ class Modified_UNET(nn.Module):
         self.encoder = Encoder()
 
         if st_gnn == 'gwnet':
-          self.st_gnn = gwnet(device='cuda')
+          self.st_gnn = gwnet(device='cuda', num_nodes=n_counties)
         elif st_gnn == 'dcrnn':
           self.st_gnn = DCRNNModel(**default_kwargs).cuda()
         elif st_gnn == 'gman':

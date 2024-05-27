@@ -8,14 +8,24 @@ import os
 import torch.nn as nn
 from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, print_memory_usage, plot_training_history, save_checkpoint
 from models.unet import Modified_UNET
+import pandas as pd
+import sys
+
+ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
+pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+pickle_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/original"
+dir_image = pickle_dir
 
 
-dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
+train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
+train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
 
 
 def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-  model = Modified_UNET(st_gnn=st_gnn).to(device=device)
+  #model = Modified_UNET(st_gnn=st_gnn).to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
 
   transform = transforms.Compose([
     transforms.ToTensor(),          # Convert to tensor
@@ -27,7 +37,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   # Load dataset
   
   if dataset is None:
-    dataset = BlackMarbleDataset(dir_image, size=size, transform=transform, start_index=horizon)
+    dataset = BlackMarbleDataset(dir_image, size=size, transform=transform, start_index=horizon, case_study=train_ia_id, raster=True)
 
   #print(f'size of train dataset: {len(dataset)}')
 
@@ -36,15 +46,16 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   train_set, val_set= random_split(dataset, [n_train, n_val])
 
   # Create data loaders
-  loader_args = dict(batch_size=batch_size, num_workers=2)
+  loader_args = dict(batch_size=batch_size, num_workers=0)
   train_loader = DataLoader(train_set, shuffle=True, **loader_args)
   val_loader = DataLoader(val_set, shuffle=True, **loader_args)
   #test_loader = DataLoader(test_set, shuffle=True, **loader_args)
 
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
-  criterion = mse_per_pixel
-  
+  #criterion = mse_per_pixel
+  criterion = nn.MSELoss(reduction='none')  
+
   # Alternative Benchmarks
   rmse = rmse_per_pixel
   mae = mae_per_pixel
@@ -72,9 +83,20 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_mape = 0
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
       for item in train_loader:
-        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        #past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        past_tensor, future_tensor, mask_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5).float() for tensor in item)
+
         preds_tensor = model(past_tensor)
-        loss = criterion(preds_tensor, future_tensor)
+        #loss = criterion(preds_tensor, future_tensor)
+        #print_memory_usage() 
+        elementwise_loss = criterion(preds_tensor, future_tensor)
+        masked_loss = elementwise_loss * mask_tensor
+
+        mean_loss = masked_loss.sum() / mask_tensor.sum()
+
+        #mean_loss.backward()
+        mean_loss.backward()
+
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
           mae_loss = mae(preds_tensor, future_tensor)
@@ -84,13 +106,15 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
         train_mape += mape_loss.item()
 
         optimizer.zero_grad()
-        loss.backward()
+        #loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
 
         pbar.update(past_tensor.shape[0])    
-        epoch_loss += loss.item()
-        pbar.set_postfix({'loss (batch)': loss.item()})
+        #epoch_loss += loss.item()
+        #pbar.set_postfix({'loss (batch)': loss.item()})
+        epoch_loss += mean_loss.item()
+        pbar.set_postfix({'loss (batch)': mean_loss.item()})
 
     model.eval()
     val_loss = 0
@@ -100,15 +124,23 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
     with torch.no_grad():
       for item in val_loader:
-        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        #past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
+        past_tensor, future_tensor, mask_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5).float() for tensor in item)
+
         preds_tensor = model(past_tensor)
 
-        loss = criterion(preds_tensor, future_tensor)
+        #loss = criterion(preds_tensor, future_tensor)
+
+        val_elementwise_loss = criterion(preds_tensor, future_tensor)
+        val_masked_loss = val_elementwise_loss * mask_tensor
+        val_mean_loss = val_masked_loss.sum() / mask_tensor.sum()
+        val_loss += val_mean_loss
+
         val_rmse_loss = rmse(preds_tensor, future_tensor)
         val_mae_loss = mae(preds_tensor, future_tensor)
         val_mape_loss = mape(preds_tensor, future_tensor)
 
-        val_loss += loss.item()
+        #val_loss += loss.item()
         val_rmse += val_rmse_loss.item()
         val_mae += val_mae_loss.item()
         val_mape += val_mape_loss.item()
@@ -132,7 +164,8 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_val_metrics['train_mape'].append(avg_train_mape_loss)
     train_val_metrics['val_mape'].append(avg_val_mape_loss)
 
-    print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
+    print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}')
+    #print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
 
     chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
     chck_save_path = os.path.join(chck_folder, ckpt_file_name)
@@ -149,7 +182,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
-    parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
+    parser.add_argument('--batch_size', dest='batch_size', type=int, default=4, help='Batch size')
     parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
     parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
     parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')

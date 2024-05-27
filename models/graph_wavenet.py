@@ -42,7 +42,8 @@ feature_vector_size = 16
 # Necessary for GWN:
 
 randomadj = True
-adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+#adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+adjdata = "/home/aaparcedo/multimodal_outage/data/graph/modified_adj_mx.csv"
 adjtype = "doubletransition"
 
 sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
@@ -96,8 +97,11 @@ class gcn(nn.Module):
         return h
 
 class gwnet(nn.Module):
-    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
+    def __init__(self, device, num_nodes, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
         super(gwnet, self).__init__()
+        
+        self.num_nodes = num_nodes
+
         self.dropout = dropout
         self.blocks = blocks
         self.layers = layers
@@ -183,7 +187,7 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
-        input = input.view(1, 16, 67, 7)
+        input = input.view(1, 16, self.num_nodes, 7)
 
         in_len = input.size(2)
         if in_len<self.receptive_field:
@@ -249,6 +253,6 @@ class gwnet(nn.Module):
         x = F.relu(skip)
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
-        x = x.view(67, 7, 16)
+        x = x.view(self.num_nodes, 7, 16)
         return x
 

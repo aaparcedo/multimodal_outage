@@ -5,28 +5,41 @@ import os
 from PIL import Image
 import pandas as pd
 import numpy as np
+import numpy.ma as ma
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
-#from normalization import normalize_and_transform_images
-
+import pickle
 
 class BlackMarbleDataset(Dataset):
-    def __init__(self, data_dir, size, case_study, start_index=7, transform=None):
+    def __init__(self, data_dir, size, case_study, start_index=7, transform=None, raster=True):
         self.data_dir = data_dir
         self.size = size
         self.start_index = start_index
         self.county_names = sorted(os.listdir(data_dir))
+   
+        self.case_study = case_study
+        
+        self.exclude_counties = ['broward', 'monroe']
+        self.county_names = [county for county in self.county_names if county not in self.exclude_counties]
+
         self.transform = transform if transform is not None else transforms.ToTensor()
+        self.raster = raster
+        self.mask_value = 0
         # Sorting each county's images by date
         self.sorted_image_paths = {
           county: find_case_study_dates(
             size,
             sorted(os.listdir(os.path.join(data_dir, county)),
               key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
-            case_study=case_study  
+            case_study=self.case_study  
           )  for county in self.county_names
         }
+
+
+
+        self.mean = 0.4151714285714286
+        self.std = 4.052419047619047
 
     def __len__(self):
         return len(self.sorted_image_paths[self.county_names[0]]) - self.start_index * 2
@@ -34,12 +47,12 @@ class BlackMarbleDataset(Dataset):
     def __getitem__(self, idx):
         past_image_list = []
         future_image_list = []
-        
+        mask_list = []
         # Fetch images for the start_index days period
         for day in range(self.start_index):
             past_days_image_list = []  # Hold images for one day from all counties
             future_days_image_list = []
-
+            future_days_mask_list = []
             for county in self.county_names:
                 county_path = os.path.join(self.data_dir, county)
                 past_image_path = os.path.join(
@@ -47,26 +60,47 @@ class BlackMarbleDataset(Dataset):
                 future_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
 
-                past_image = Image.open(past_image_path).convert('RGB')
-                future_image = Image.open(future_image_path).convert('RGB')
+                if self.raster:
+                  with open(past_image_path, 'rb') as file1, open(future_image_path, 'rb') as file2:
+                    past_image = pad_county_raster(pickle.load(file1)["DNB_BRDF-Corrected_NTL"].values)
+                    future_image = pad_county_raster(pickle.load(file2)["DNB_BRDF-Corrected_NTL"].values)
+                    future_mask = ~np.isnan(future_image)
+                    past_image = ma.masked_invalid(past_image).filled(self.mask_value)
+                    future_image = ma.masked_invalid(future_image).filled(self.mask_value)
+                else:
+                  past_image = Image.open(past_image_path).convert('RGB')
+                  future_image = Image.open(future_image_path).convert('RGB')
 
                 if self.transform:
                     past_image = self.transform(past_image)
                     future_image = self.transform(future_image)
 
+                # normalize
+                past_image = (past_image - self.mean) / self.std
+                future_image = (future_image - self.mean) / self.std
+
                 past_days_image_list.append(past_image)
                 future_days_image_list.append(future_image)
+ 
+                future_days_mask_list.append(torch.tensor(future_mask, dtype=torch.bool).unsqueeze(0))
 
             # Stack all county images for one day
             past_image_list.append(torch.stack(past_days_image_list))
             future_image_list.append(torch.stack(future_days_image_list))
+            
+            mask_list.append(torch.stack(future_days_mask_list))
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
 
+        mask_tensor = torch.stack(mask_list)
+
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
         # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
-        return (past_image_tensor, future_image_tensor)
+        if self.raster:
+          return (past_image_tensor, future_image_tensor, mask_tensor)
+        else:
+          return (past_image_tensor, future_image_tensor)
 
 
 def find_case_study_dates(size, image_paths, case_study):
@@ -103,6 +137,40 @@ def find_case_study_dates(size, image_paths, case_study):
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
     return filtered_image_paths
 
+def pad_county_raster(county_raster):
+
+  pad_size = 256
+
+  padded_raster = np.pad(county_raster, ((0, pad_size - county_raster.shape[0]), (0, pad_size - county_raster.shape[1])), mode='constant', constant_values=np.nan)
+
+  return padded_raster
+
+
+def create_month_mask():
+  
+  month_composites_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/monthly/"
+  mask_dir = "/home/aaparcedo/multimodal_outage/data/mask"  
+
+  county_names = sorted(os.listdir(month_composites_dir))
+
+  # remove counties with a size greater than 256
+  exclude_counties = ['broward', 'monroe']
+  county_names = [county for county in county_names if county not in exclude_counties]
+
+  for county in county_names:
+    county_month_composite_folder_path = os.path.join(month_composites_dir, county)
+    county_month_composite_raster_path = os.path.join(county_month_composite_folder_path, f'{county}.pickle')    
+
+    with open(county_month_composite_raster_path, 'rb') as file:
+      month_composite_raster = pickle.load(file)
+
+    pad_month_composite_raster = pad_county_raster(month_composite_raster["NearNadir_Composite_Snow_Free"].isel(time=0).values)
+    county_mask = np.isnan(pad_month_composite_raster)
+
+    mask_save_filename = f"{county}.npy"
+    mask_save_path = os.path.join(mask_dir, mask_save_filename)
+    np.save(mask_save_path, county_mask)
+    
 
 def denormalize(tensor):
   
@@ -131,7 +199,7 @@ def mae_per_pixel(x, y):
 
 
 def mape_per_pixel(x, y, epsilon=1e-8):
-    return torch.mean(torch.abs((x - y) / (x + epsilon)))
+    return torch.mean(torch.abs((x - y) / (x + epsilon))) * 100
 
 # DCRNN utilities: 
 
