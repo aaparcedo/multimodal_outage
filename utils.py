@@ -16,7 +16,7 @@ class BlackMarbleDataset(Dataset):
         self.data_dir = data_dir
         self.size = size
         self.start_index = start_index
-        self.county_paths = os.listdir(data_dir)
+        self.county_names = sorted(os.listdir(data_dir))
         self.transform = transform if transform is not None else transforms.ToTensor()
         # Sorting each county's images by date
         self.sorted_image_paths = {
@@ -25,30 +25,27 @@ class BlackMarbleDataset(Dataset):
             sorted(os.listdir(os.path.join(data_dir, county)),
               key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
             case_study=case_study  
-          )  for county in self.county_paths
+          )  for county in self.county_names
         }
 
     def __len__(self):
-        return len(self.sorted_image_paths['orange'])
-
-    def __iter__(self):
-        return iter(range(self.start_index, len(self.data_dir) - self.start_index))
+        return len(self.sorted_image_paths[self.county_names[0]]) - self.start_index * 2
 
     def __getitem__(self, idx):
         past_image_list = []
         future_image_list = []
-
+        
         # Fetch images for the start_index days period
         for day in range(self.start_index):
             past_days_image_list = []  # Hold images for one day from all counties
             future_days_image_list = []
 
-            for county in self.county_paths:
+            for county in self.county_names:
                 county_path = os.path.join(self.data_dir, county)
                 past_image_path = os.path.join(
-                    county_path, self.sorted_image_paths[county][day])
+                    county_path, self.sorted_image_paths[county][day + idx])
                 future_image_path = os.path.join(
-                    county_path, self.sorted_image_paths[county][day + self.start_index])
+                    county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
 
                 past_image = Image.open(past_image_path).convert('RGB')
                 future_image = Image.open(future_image_path).convert('RGB')
@@ -73,7 +70,10 @@ class BlackMarbleDataset(Dataset):
 
 
 def find_case_study_dates(size, image_paths, case_study):
-    if size == 'S':
+    
+    if size == 'test':
+      horizon = 15
+    elif size == 'S':
       horizon = 30 # or 90 
     elif size == 'M':
       horizon = 60
@@ -106,8 +106,8 @@ def find_case_study_dates(size, image_paths, case_study):
 
 def denormalize(tensor):
   
-  mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1).cuda()
-  std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1).cuda()
+  mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3).cuda()
+  std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3).cuda()
   
   return tensor * std + mean
 
@@ -297,20 +297,31 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
   - N/A
   """
 
+  #preds = reals
+
+  #print(f'preds[0, 0, 0, :, :, :]: {preds[0, 0, 0, :, :, :]}')
+  #print(f'reals[0, 0, 0, :, :, :]: {reals[0, 0, 0, :, :, :]}')
+
   county_names = sorted(os.listdir(dataset_dir))
   preds_save_dir = os.path.join(save_dir, 'test_preds') # /logs/job_id/test_preds/
   os.makedirs(preds_save_dir, exist_ok=True)
   for pred_idx in range(preds.shape[0]):
     for horizon in range(preds.shape[2]):
-      horizon_folder_path = os.path.join(preds_save_dir, str(horizon)) # /logs/job_id/test_preds/horizon/
+      horizon_folder_path = os.path.join(preds_save_dir, str(horizon + 1)) # /logs/job_id/test_preds/horizon/
       os.makedirs(horizon_folder_path, exist_ok=True)
       for county_idx in range(preds.shape[1]):
         county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx]) # /logs/job_id/test_preds/horizon/county/
         os.makedirs(county_horizon_folder_path, exist_ok=True)
 
-        image_save_path = os.path.join(county_horizon_folder_path, dataset.sorted_image_paths[county_names[county_idx]][pred_idx])
-        image_np = denormalize(preds[pred_idx, county_idx, horizon]).permute(1, 2, 0).cpu().numpy().astype(np.uint8)  # Convert tensor to numpy array
-        image = Image.fromarray(image_np)
+        image_name = dataset.sorted_image_paths[county_names[county_idx]][pred_idx + horizon + dataset.start_index]
+        
+        image_save_path = os.path.join(county_horizon_folder_path, image_name)
+
+        image_np = denormalize(preds[pred_idx, county_idx, horizon].permute(1, 2, 0)).cpu().numpy()
+        #image_np = preds[pred_idx, county_idx, horizon].permute(1, 2, 0).cpu().numpy()
+        image_np = np.clip(image_np, 0, 1)
+        image_np_uint8 = (image_np * 255).astype(np.uint8)
+        image = Image.fromarray(image_np_uint8)
         image.save(image_save_path)
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
