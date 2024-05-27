@@ -131,7 +131,7 @@ def get_args():
     parser.add_argument('--st_gnn', dest='st_gnn', type=str, default='gwnet', help='Select st-gnn')
     parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
-    parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
+    parser.add_argument('--size', dest='size', type=str, default='test', help='Dataset size/horizon')
     parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
     parser.add_argument('--device', dest='device', type=str, default='cuda', help='Select device, i.e., "cpu" or "cuda"')
     parser.add_argument('--checkpoint_path', dest='ckpt_path', type=str, help='Model checkpoint path to test')
