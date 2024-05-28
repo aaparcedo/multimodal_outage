@@ -17,7 +17,8 @@ class BlackMarbleDataset(Dataset):
         self.size = size
         self.start_index = start_index
         self.county_names = sorted(os.listdir(data_dir))
-        self.transform = transform if transform is not None else transforms.ToTensor()
+        self.case_study = case_study
+
         # Sorting each county's images by date
         self.sorted_image_paths = {
           county: find_case_study_dates(
@@ -27,6 +28,25 @@ class BlackMarbleDataset(Dataset):
             case_study=case_study  
           )  for county in self.county_names
         }
+ 
+        if self.size == 'S':
+          self.mean =  [0.4700, 0.5617, 0.5993]
+          self.std = [0.3471, 0.3139, 0.2206]
+        elif self.size == 'M':
+          self.mean = [0.4993, 0.5872, 0.6155]
+          self.std = [0.3394, 0.3055, 0.2150]
+        elif self.size == 'L':
+          self.mean = [0.5117, 0.5980, 0.6224]
+          self.std = [0.3353, 0.3013, 0.2123]
+        else:
+          print("Pick a size with normalization available")
+
+        self.transform = transform if transform is not None else transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=self.mean, std=self.std)
+        ])
+        print(f'mean: {self.mean}')
+        print(f'std: {self.std}')
 
     def __len__(self):
         return len(self.sorted_image_paths[self.county_names[0]]) - self.start_index * 2

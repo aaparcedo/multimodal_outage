@@ -15,11 +15,6 @@ dir_image = ntl_dir
 
 def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
 
-  transform = transforms.Compose([
-    transforms.ToTensor(),          # Convert to tensor
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-  ])
-
   train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
   train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
   train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
@@ -40,8 +35,8 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
 
   for case_train, case_test in case_study_events:
  
-    train_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_train, start_index=horizon, transform=transform)
-    test_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_test, start_index=horizon, transform=transform)
+    train_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_train, start_index=horizon)
+    test_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_test, start_index=horizon)
 
     print(f'Train events: {case_train.keys()}, Test event: {case_test.keys()}')
  
