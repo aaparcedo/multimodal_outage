@@ -38,15 +38,22 @@ class BlackMarbleDataset(Dataset):
         elif self.size == 'L':
           self.mean = [0.5117, 0.5980, 0.6224]
           self.std = [0.3353, 0.3013, 0.2123]
-        else:
-          print("Pick a size with normalization available")
+        else: #'XL'
+          self.mean = [0.5136, 0.5997, 0.6234]
+          self.std = [0.3353, 0.3012, 0.2122]
 
         self.transform = transform if transform is not None else transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.std)
         ])
-        print(f'mean: {self.mean}')
-        print(f'std: {self.std}')
+
+        #self.transform = transform if transform is not None else transforms.ToTensor()
+
+    def denormalize(self, tensor):
+      mean = torch.tensor(self.mean).view(1, 1, 3).cuda()
+      std = torch.tensor(self.std).view(1, 1, 3).cuda()
+
+      return tensor * std + mean
 
     def __len__(self):
         return len(self.sorted_image_paths[self.county_names[0]]) - self.start_index * 2
@@ -123,13 +130,6 @@ def find_case_study_dates(size, image_paths, case_study):
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
     return filtered_image_paths
 
-
-def denormalize(tensor):
-  
-  mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 1, 3).cuda()
-  std = torch.tensor([0.229, 0.224, 0.225]).view(1, 1, 3).cuda()
-  
-  return tensor * std + mean
 
 def mse_per_pixel(x, y):
     squared_diff = (x - y) ** 2
@@ -337,7 +337,7 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
         
         image_save_path = os.path.join(county_horizon_folder_path, image_name)
 
-        image_np = denormalize(preds[pred_idx, county_idx, horizon].permute(1, 2, 0)).cpu().numpy()
+        image_np = dataset.denormalize(preds[pred_idx, county_idx, horizon].permute(1, 2, 0)).cpu().numpy()
         #image_np = preds[pred_idx, county_idx, horizon].permute(1, 2, 0).cpu().numpy()
         image_np = np.clip(image_np, 0, 1)
         image_np_uint8 = (image_np * 255).astype(np.uint8)
