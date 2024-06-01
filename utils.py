@@ -61,11 +61,13 @@ class BlackMarbleDataset(Dataset):
     def __getitem__(self, idx):
         past_image_list = []
         future_image_list = []
-        
+        past_julian_day_list = []
+        future_julian_day_list = []
+ 
         # Fetch images for the start_index days period
         for day in range(self.start_index):
-            past_days_image_list = []  # Hold images for one day from all counties
-            future_days_image_list = []
+            past_days_county_image_list = []  # Hold images for one day from all counties
+            future_days_county_image_list = []
 
             for county in self.county_names:
                 county_path = os.path.join(self.data_dir, county)
@@ -74,6 +76,9 @@ class BlackMarbleDataset(Dataset):
                 future_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
 
+                past_julian_day = get_julian_day_from_filename(past_image_path, tensor=True)
+                future_julian_day = get_julian_day_from_filename(future_image_path, tensor=True)
+
                 past_image = Image.open(past_image_path).convert('RGB')
                 future_image = Image.open(future_image_path).convert('RGB')
 
@@ -81,20 +86,53 @@ class BlackMarbleDataset(Dataset):
                     past_image = self.transform(past_image)
                     future_image = self.transform(future_image)
 
-                past_days_image_list.append(past_image)
-                future_days_image_list.append(future_image)
+                past_days_county_image_list.append(past_image)
+                future_days_county_image_list.append(future_image)
+            
 
             # Stack all county images for one day
-            past_image_list.append(torch.stack(past_days_image_list))
-            future_image_list.append(torch.stack(future_days_image_list))
+            past_image_list.append(torch.stack(past_days_county_image_list))
+            future_image_list.append(torch.stack(future_days_county_image_list))
+            past_julian_day_list.append(past_julian_day)
+            future_julian_day_list.append(future_julian_day)
+
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
 
+        past_image_tensor, future_image_tensor = add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list)
+
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
         # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
+        # new size with julian day should be [1, 7, 7, 67, 3, 128, 128]
         return (past_image_tensor, future_image_tensor)
 
+def add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list):
+
+  for idx, (S_julianday, T_julianday) in enumerate(zip(past_julian_day_list, future_julian_day_list)):
+    past_image_tensor[idx, :, :, :, :] = S_julianday
+    future_image_tensor[idx, :, :, :, :] = T_julianday
+
+  return past_image_tensor, future_image_tensor
+
+def get_julian_day_from_filename(filename, tensor=True, normalize=True):
+  """
+  Parameters:
+  - filename (str): filename to infer date from (must be in '2012_01_01.jpg' format')
+  - tensor (bool): weather to return julian day as tensor 
+
+  Returns:
+  - julian_day
+  """
+  julian_day = pd.Timestamp(filename.split('/')[-1].split('.')[0].replace('_', '-')).dayofyear
+
+  if tensor:
+    torch.tensor(julian_day)
+
+  if normalize:
+    julian_day = (julian_day - 1) / (365 - 1)
+
+  return julian_day
 
 def find_case_study_dates(size, image_paths, case_study):
     
@@ -128,6 +166,8 @@ def find_case_study_dates(size, image_paths, case_study):
 
         filtered_dates.update(case_study_dates)
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
+    #print(f'filtered_image_paths[0]: {filtered_image_paths[0]}')
+    #print(f'filtered_image_paths[-1]: {filtered_image_paths[-1]}')
     return filtered_image_paths
 
 
