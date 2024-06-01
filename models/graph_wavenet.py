@@ -185,7 +185,7 @@ class gwnet(nn.Module):
     def forward(self, input):
         input = input.view(1, 16, 67, 7)
 
-        in_len = input.size(2)
+        in_len = input.size(3)
         if in_len<self.receptive_field:
             x = nn.functional.pad(input,(self.receptive_field-in_len,0,0,0))
         else:
