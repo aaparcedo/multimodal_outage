@@ -8,26 +8,27 @@ import os
 import torch.nn as nn
 from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, print_memory_usage, plot_training_history, save_checkpoint
 from models.unet import Modified_UNET
+import pandas as pd
 
+ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
+pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 
-dir_image = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
+dir_image = ntl_dir
 
+train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
+train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
+train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
 
 def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
   model = Modified_UNET(st_gnn=st_gnn).to(device=device)
-
-  transform = transforms.Compose([
-    transforms.ToTensor(),          # Convert to tensor
-    #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-  ])
 
   print(f'device: {device}')
 
   # Load dataset
   
   if dataset is None:
-    dataset = BlackMarbleDataset(dir_image, size=size, transform=transform, start_index=horizon)
+    dataset = BlackMarbleDataset(dir_image, size=size, case_study=train_ia_id, start_index=horizon)
 
   #print(f'size of train dataset: {len(dataset)}')
 
@@ -134,6 +135,8 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
     print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
 
+    if ckpt_file_name == 'test':
+      ckpt_file_name = f'{job_id}.pth'
     chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
     chck_save_path = os.path.join(chck_folder, ckpt_file_name)
     os.makedirs(chck_folder, exist_ok=True)
@@ -148,6 +151,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
 def get_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--st_gnn', dest='st_gnn', type=str, default='gwnet', help='Select st-gnn')
     parser.add_argument('--epochs', dest='epochs', type=int, default=5, help='Number of epochs')
     parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
     parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
@@ -159,5 +163,5 @@ def get_args():
 
 if __name__ == '__main__':
     args = get_args()
-    train_model(epochs=args.epochs, batch_size=args.batch_size,
+    train_model(st_gnn=args.st_gnn, epochs=args.epochs, batch_size=args.batch_size,
                 horizon=args.horizon, size=args.size, job_id=args.job_id, device=args.device)
