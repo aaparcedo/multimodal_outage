@@ -146,11 +146,11 @@ class gwnet(nn.Module):
                 # dilated convolutions
                 self.filter_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                    out_channels=dilation_channels,
-                                                   kernel_size=(1, 1), dilation=new_dilation))
+                                                   kernel_size=(1, kernel_size), dilation=new_dilation))
 
                 self.gate_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                  out_channels=dilation_channels,
-                                                 kernel_size=(1, 1),  dilation=new_dilation))
+                                                 kernel_size=(1, kernel_size),  dilation=new_dilation))
 
                 # 1x1 convolution for residual connection
                 self.residual_convs.append(nn.Conv2d(in_channels=dilation_channels,
