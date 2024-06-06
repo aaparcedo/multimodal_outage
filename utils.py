@@ -1,4 +1,5 @@
 import torch
+
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import os
@@ -99,13 +100,14 @@ class BlackMarbleDataset(Dataset):
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
-
-        past_image_tensor, future_image_tensor = add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list)
+        past_S_days_tensor = torch.tensor(past_julian_day_list).view(1, 7, 1).repeat(67, 1, 1)
+ 
+        #past_image_tensor, future_image_tensor = add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list)
 
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
         # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
         # new size with julian day should be [1, 7, 7, 67, 3, 128, 128]
-        return (past_image_tensor, future_image_tensor)
+        return (past_image_tensor, future_image_tensor, past_S_days_tensor)
 
 def add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list):
 
@@ -172,7 +174,7 @@ def find_case_study_dates(size, image_paths, case_study):
 
 
 def mse_per_pixel(x, y):
-    squared_diff = (x - y) ** 2
+    squared_diff = (x  - y) ** 2
     total_mse = torch.mean(squared_diff)
     return total_mse
 
@@ -357,13 +359,8 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
   - N/A
   """
 
-  #preds = reals
-
-  #print(f'preds[0, 0, 0, :, :, :]: {preds[0, 0, 0, :, :, :]}')
-  #print(f'reals[0, 0, 0, :, :, :]: {reals[0, 0, 0, :, :, :]}')
-
   county_names = sorted(os.listdir(dataset_dir))
-  preds_save_dir = os.path.join(save_dir, 'test_preds') # /logs/job_id/test_preds/
+  preds_save_dir = os.path.join(save_dir, 'ian_preds_in_dist') # /logs/job_id/test_preds/
   os.makedirs(preds_save_dir, exist_ok=True)
   for pred_idx in range(preds.shape[0]):
     for horizon in range(preds.shape[2]):
@@ -378,11 +375,11 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
         image_save_path = os.path.join(county_horizon_folder_path, image_name)
 
         image_np = dataset.denormalize(preds[pred_idx, county_idx, horizon].permute(1, 2, 0)).cpu().numpy()
-        #image_np = preds[pred_idx, county_idx, horizon].permute(1, 2, 0).cpu().numpy()
         image_np = np.clip(image_np, 0, 1)
         image_np_uint8 = (image_np * 255).astype(np.uint8)
         image = Image.fromarray(image_np_uint8)
         image.save(image_save_path)
+
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {

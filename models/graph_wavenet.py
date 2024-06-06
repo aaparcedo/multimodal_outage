@@ -37,7 +37,7 @@ image_dimension = 128
 batch_size = 4
 n_counties = 67
 n_timestep = 7 
-feature_vector_size = 16
+feature_vector_size = 17
 
 # Necessary for GWN:
 
@@ -96,7 +96,7 @@ class gcn(nn.Module):
         return h
 
 class gwnet(nn.Module):
-    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
+    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size-1,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
         super(gwnet, self).__init__()
         self.dropout = dropout
         self.blocks = blocks
@@ -183,7 +183,7 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
-        input = input.view(1, 16, 67, 7)
+        input = input.view(1, 17, 67, 7)
 
         in_len = input.size(3)
         if in_len<self.receptive_field:

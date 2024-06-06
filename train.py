@@ -36,6 +36,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   n_train = len(dataset) - n_val
   train_set, val_set= random_split(dataset, [n_train, n_val])
 
+
   # Create data loaders
   loader_args = dict(batch_size=batch_size, num_workers=2)
   train_loader = DataLoader(train_set, shuffle=True, **loader_args)
@@ -44,8 +45,9 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
-  criterion = mse_per_pixel
-  
+  #criterion = mse_per_pixel
+  criterion = nn.MSELoss()  
+
   # Alternative Benchmarks
   rmse = rmse_per_pixel
   mae = mae_per_pixel
@@ -62,7 +64,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     'val_mape': []
   }
 
-  best_val_loss = float('inf') 
+  best_val_metrics = {'loss': float('inf'), 'rmse':  float('inf'), 'mae':  float('inf'), 'mape':  float('inf'), 'epoch': 0}
 
   # Begin training
   for epoch in range(epochs):
@@ -73,9 +75,12 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_mape = 0
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
       for item in train_loader:
-        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
-        preds_tensor = model(past_tensor)
+        past_tensor, future_tensor, past_S_days_tensor = item
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
+
+        preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
         loss = criterion(preds_tensor, future_tensor)
+
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
           mae_loss = mae(preds_tensor, future_tensor)
@@ -101,8 +106,11 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
     with torch.no_grad():
       for item in val_loader:
-        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
-        preds_tensor = model(past_tensor)
+
+        past_tensor, future_tensor, past_S_days_tensor = item
+        past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
+
+        preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
 
         loss = criterion(preds_tensor, future_tensor)
         val_rmse_loss = rmse(preds_tensor, future_tensor)
@@ -135,17 +143,20 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
     print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
 
-    if ckpt_file_name == 'test':
-      ckpt_file_name = f'{job_id}.pth'
     chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
-    chck_save_path = os.path.join(chck_folder, ckpt_file_name)
     os.makedirs(chck_folder, exist_ok=True)
 
-    if val_loss < best_val_loss:
-      best_val_loss = val_loss 
-      save_checkpoint(model, optimizer, epoch, chck_save_path)       
-     # print(f"New best validation loss: {best_val_loss}, model weights saved.")
+    if avg_val_loss < best_val_metrics['loss']:
+      best_val_metrics['loss'] = avg_val_loss
+      best_val_metrics['rmse'] = avg_val_rmse_loss
+      best_val_metrics['mae'] = avg_val_mae_loss
+      best_val_metrics['mape'] = avg_val_mape_loss
+      best_val_metrics['epoch'] = epoch
+      ckpt_file_name = f'{job_id}_e{best_val_metrics["epoch"]}.pth'
+      chck_save_path = os.path.join(chck_folder, ckpt_file_name)
+      save_checkpoint(model, optimizer, epoch, chck_save_path)
 
+  print(f'Best on epoch {best_val_metrics["epoch"] + 1} (val) => Loss={best_val_metrics["loss"]}, RMSE={best_val_metrics["rmse"]}, MAE={best_val_metrics["mae"]}, MAPE: {best_val_metrics["mape"]}')
   return train_val_metrics
 
 

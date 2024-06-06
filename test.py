@@ -13,8 +13,6 @@ import numpy as np
 
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
-
-
 dir_image = ntl_dir
 
 train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
@@ -31,14 +29,9 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   model = Modified_UNET(st_gnn=st_gnn).to(device=device)
   model = load_checkpoint(ckpt_path, model)
 
-  transform = transforms.Compose([
-    transforms.ToTensor(),          # Convert to tensor
-    #transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-  ])
-
   # Load dataset
   if dataset is None:  
-    dataset = BlackMarbleDataset(dir_image, size=size, start_index=horizon, transform=transform, case_study=test_m)
+    dataset = BlackMarbleDataset(dir_image, size=size, case_study=test_ia, start_index=horizon)
 
   print(f'Size of test dataset: {len(dataset)}')
 
@@ -47,8 +40,9 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   test_loader = DataLoader(dataset, shuffle=True, **loader_args)
 
   # Set up optimizer and custom loss function
-  criterion = mse_per_pixel
-  
+  #criterion = mse_per_pixel
+  criterion = nn.MSELoss()  
+
   # Alternative Benchmarks
   rmse = rmse_per_pixel
   mae = mae_per_pixel
@@ -65,8 +59,11 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   
   with torch.no_grad():
     for item in test_loader:
-      past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in item)
-      preds_tensor = model(past_tensor)
+      past_tensor, future_tensor, past_S_days_tensor = item
+      past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
+
+      preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
+
       loss = criterion(preds_tensor, future_tensor)
       test_rmse_loss = rmse(preds_tensor, future_tensor)
       test_mae_loss = mae(preds_tensor, future_tensor)

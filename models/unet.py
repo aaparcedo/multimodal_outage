@@ -108,25 +108,25 @@ class Contraction(nn.Module):
 
             x1 = self.inc(input[county])
             self.feature_maps[0].append(x1)
-
+#            print(f'inc output (x1) shape: {x1.shape}')
             x2 = self.down1(x1)
             self.feature_maps[1].append(x2)
-
+ #           print(f'down1 output (x2) shape: {x2.shape}')
             x3 = self.down2(x2)
             self.feature_maps[2].append(x3)
-
+  #          print(f'down2 output (x3) shape: {x3.shape}')
             x4 = self.down3(x3)
             self.feature_maps[3].append(x4)
-
+   #         print(f'down3 output (x4) shape: {x4.shape}')
             x5 = self.down4(x4)
             encoder_input.append(x5)
-
+    #        print(f'down1 output (x5) shape: {x5.shape}')
         for feature_map in range(len(self.feature_maps)):
             self.feature_maps[feature_map] = torch.stack(self.feature_maps[feature_map])
 
         encoder_input = torch.stack(encoder_input)
         encoder_input = encoder_input.view(n_counties, n_timestep, -1)
-
+     #   print(f'encoder input shape: {encoder_input.shape}')
         return encoder_input
 
 class Encoder(nn.Module):
@@ -135,7 +135,9 @@ class Encoder(nn.Module):
         self.downsized_image_dimension = image_dimension / 16
         self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(self.first_layer_size, 1024)
+        self.dropout1 = nn.Dropout(p=0.3)
         self.fc2 = nn.Linear(1024, 256)
+        self.dropout2 = nn.Dropout(p=0.3)
         self.fc3 = nn.Linear(256, feature_vector_size)
 
     def forward(self, input):
@@ -143,7 +145,9 @@ class Encoder(nn.Module):
 
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
+            x = self.dropout1(x)
             x = torch.relu(self.fc2(x))
+            x = self.dropout2(x)
             x = self.fc3(x)
             wave_net_input.append(x)
 
@@ -157,8 +161,11 @@ class Decoder(nn.Module):
         self.downsized_image_dimension = int(image_dimension / 16)
         self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
         self.fc1 = nn.Linear(feature_vector_size, 64)
+        self.dropout1 = nn.Dropout(p=0.3)
         self.fc2 = nn.Linear(64, 256)
+        self.dropout2 = nn.Dropout(p=0.3)
         self.fc3 = nn.Linear(256, 1024)
+        self.dropout3 = nn.Dropout(p=0.3)
         self.fc4 = nn.Linear(1024, self.output_layer_size)
 
     def forward(self, input):
@@ -166,8 +173,11 @@ class Decoder(nn.Module):
 
         for county in range(n_counties):
             x = torch.relu(self.fc1(input[county]))
+            x = self.dropout1(x)
             x = torch.relu(self.fc2(x))
+            x = self.dropout2(x)
             x = torch.relu(self.fc3(x))
+            x = self.dropout3(x)
             x = self.fc4(x)
             expansion_input.append(x)
 
@@ -219,11 +229,18 @@ class Modified_UNET(nn.Module):
         self.decoder = Decoder()
         self.expansion = Expansion(output_channels)
 
-    def forward(self, input):
+    def forward(self, input, time_dim):
         result = []
-        for batch in range(input.shape[0]):
+        for batch in range(input.shape[0]): 
+            #print(f'input shape: {input.shape}')
+            #print(f'time_dim shape: {time_dim.shape}')
             output = self.contraction(input[batch])
             output = self.encoder(output)
+
+            #print(f'output shape: {output.shape}')
+            #print(f'time_dim[batch] shape: {time_dim[batch].shape}')
+            output = torch.cat((output, time_dim[batch]), dim=-1)
+
             output = self.st_gnn(output)
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps
