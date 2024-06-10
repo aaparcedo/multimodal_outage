@@ -30,29 +30,33 @@ class BlackMarbleDataset(Dataset):
           )  for county in self.county_names
         }
  
-        if self.size == 'S':
-          self.mean =  [0.4700, 0.5617, 0.5993]
-          self.std = [0.3471, 0.3139, 0.2206]
-        elif self.size == 'M':
-          self.mean = [0.4993, 0.5872, 0.6155]
-          self.std = [0.3394, 0.3055, 0.2150]
-        elif self.size == 'L':
-          self.mean = [0.5117, 0.5980, 0.6224]
-          self.std = [0.3353, 0.3013, 0.2123]
-        else: #'XL'
-          self.mean = [0.5136, 0.5997, 0.6234]
-          self.std = [0.3353, 0.3012, 0.2122]
+        #if self.size == 'S':
+        #  self.mean =  [0.4700, 0.5617, 0.5993]
+        #  self.std = [0.3471, 0.3139, 0.2206]
+        #elif self.size == 'M':
+        #  self.mean = [0.4993, 0.5872, 0.6155]
+        #  self.std = [0.3394, 0.3055, 0.2150]
+        #elif self.size == 'L':
+        #  self.mean = [0.5117, 0.5980, 0.6224]
+        #  self.std = [0.3353, 0.3013, 0.2123]
+        #else: #'XL'
+        #  self.mean = [0.5136, 0.5997, 0.6234]
+        #  self.std = [0.3353, 0.3012, 0.2122]
+  
+        # ntl gray with no set upper bound
+        self.mean = 0.10961227864027023
+        self.std = 0.19739273190498352
 
         self.transform = transform if transform is not None else transforms.Compose([
+            transforms.Resize((128, 128)),
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.std)
         ])
 
-        #self.transform = transform if transform is not None else transforms.ToTensor()
 
     def denormalize(self, tensor):
-      mean = torch.tensor(self.mean).view(1, 1, 3).cuda()
-      std = torch.tensor(self.std).view(1, 1, 3).cuda()
+      mean = torch.tensor(self.mean).cuda()
+      std = torch.tensor(self.std).cuda()
 
       return tensor * std + mean
 
@@ -80,8 +84,8 @@ class BlackMarbleDataset(Dataset):
                 past_julian_day = get_julian_day_from_filename(past_image_path, tensor=True)
                 future_julian_day = get_julian_day_from_filename(future_image_path, tensor=True)
 
-                past_image = Image.open(past_image_path).convert('RGB')
-                future_image = Image.open(future_image_path).convert('RGB')
+                past_image = Image.open(past_image_path).convert('L')
+                future_image = Image.open(future_image_path).convert('L')
 
                 if self.transform:
                     past_image = self.transform(past_image)
@@ -102,8 +106,6 @@ class BlackMarbleDataset(Dataset):
         future_image_tensor = torch.stack(future_image_list)
         past_S_days_tensor = torch.tensor(past_julian_day_list).view(1, 7, 1).repeat(67, 1, 1)
  
-        #past_image_tensor, future_image_tensor = add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list)
-
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
         # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
         # new size with julian day should be [1, 7, 7, 67, 3, 128, 128]
@@ -168,8 +170,6 @@ def find_case_study_dates(size, image_paths, case_study):
 
         filtered_dates.update(case_study_dates)
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
-    #print(f'filtered_image_paths[0]: {filtered_image_paths[0]}')
-    #print(f'filtered_image_paths[-1]: {filtered_image_paths[-1]}')
     return filtered_image_paths
 
 
@@ -360,7 +360,7 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
   """
 
   county_names = sorted(os.listdir(dataset_dir))
-  preds_save_dir = os.path.join(save_dir, 'ian_preds_in_dist') # /logs/job_id/test_preds/
+  preds_save_dir = os.path.join(save_dir, 'preds') # /logs/job_id/test_preds/
   os.makedirs(preds_save_dir, exist_ok=True)
   for pred_idx in range(preds.shape[0]):
     for horizon in range(preds.shape[2]):
@@ -374,12 +374,44 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
         
         image_save_path = os.path.join(county_horizon_folder_path, image_name)
 
-        image_np = dataset.denormalize(preds[pred_idx, county_idx, horizon].permute(1, 2, 0)).cpu().numpy()
+        image_tensor = preds[pred_idx, county_idx, horizon]
+        image_np = dataset.denormalize(image_tensor[0]).cpu().numpy()
         image_np = np.clip(image_np, 0, 1)
         image_np_uint8 = (image_np * 255).astype(np.uint8)
-        image = Image.fromarray(image_np_uint8)
+        image = Image.fromarray(image_np_uint8, mode='L')
+
         image.save(image_save_path)
 
+def visualize_test_results_with_reals(preds, reals, save_dir, dataset_dir, dataset):
+    """
+    Save image results from modified unet predictions and real images.
+
+    Parameters:
+    - preds (torch.Tensor): output predictions from modified unet model
+    - reals (torch.Tensor): ground truth real images
+    - save_dir (str): directory to save images
+    - dataset_dir (str): directory of dataset images
+    - dataset (BlackMarbleDataset): dataset object  
+
+    Returns:
+    - N/A
+    """
+    county_names = sorted(os.listdir(dataset_dir))
+    preds_save_dir = os.path.join(save_dir, 'preds')  # /logs/job_id/test_preds/
+    reals_save_dir = os.path.join(save_dir, 'reals')  # /logs/job_id/test_reals/
+    os.makedirs(preds_save_dir, exist_ok=True)
+    os.makedirs(reals_save_dir, exist_ok=True)
+
+    for pred_idx in range(preds.shape[0]):
+        for horizon in range(preds.shape[2]):
+            horizon_folder_path_preds = os.path.join(preds_save_dir, str(horizon + 1))  # /logs/job_id/test_preds/horizon/
+        #print(f"Unexpected keys: {unexpected_keys}")
+    #model.load_state_dict(checkpoint['state_dict'],strict=False)
+    if optimizer:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+    start_epoch = checkpoint['epoch']
+    print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
+    return model
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {

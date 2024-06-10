@@ -7,11 +7,17 @@ import pandas as pd
 import os
 import numpy as np
 import pickle
+import torch
+
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
-
-dir_image = ntl_dir
+ntl_gray_dir =  "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
+dir_image = ntl_gray_dir
 
 def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
 

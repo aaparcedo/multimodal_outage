@@ -6,14 +6,15 @@ import os
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results
+from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results, visualize_test_results_with_reals
 from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
 
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
-dir_image = ntl_dir
+ntl_gray_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
+dir_image = ntl_gray_dir
 
 train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
 train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
@@ -26,7 +27,7 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   ckpt_folder_path = os.path.join(job_id_folder_path, 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
-  model = Modified_UNET(st_gnn=st_gnn).to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
   model = load_checkpoint(ckpt_path, model)
 
   # Load dataset
@@ -40,7 +41,6 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   test_loader = DataLoader(dataset, shuffle=True, **loader_args)
 
   # Set up optimizer and custom loss function
-  #criterion = mse_per_pixel
   criterion = nn.MSELoss()  
 
   # Alternative Benchmarks
@@ -68,6 +68,7 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
       test_rmse_loss = rmse(preds_tensor, future_tensor)
       test_mae_loss = mae(preds_tensor, future_tensor)
       test_mape_loss = mape(preds_tensor, future_tensor)
+
       
       test_loss += loss.item()
       test_rmse += test_rmse_loss.item()
@@ -95,7 +96,8 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   reals = torch.cat(real, dim=0) 
 
   if visualize:
-    visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
+    #visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
+    visualize_test_results_with_reals(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
   h_mae_hist = []

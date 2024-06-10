@@ -21,7 +21,7 @@ train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Time
 
 def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-  model = Modified_UNET(st_gnn=st_gnn).to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
 
   print(f'device: {device}')
 
@@ -45,7 +45,6 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
-  #criterion = mse_per_pixel
   criterion = nn.MSELoss()  
 
   # Alternative Benchmarks
@@ -77,7 +76,6 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
       for item in train_loader:
         past_tensor, future_tensor, past_S_days_tensor = item
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
-
         preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
         loss = criterion(preds_tensor, future_tensor)
 
@@ -152,7 +150,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
       best_val_metrics['mae'] = avg_val_mae_loss
       best_val_metrics['mape'] = avg_val_mape_loss
       best_val_metrics['epoch'] = epoch
-      ckpt_file_name = f'{job_id}_e{best_val_metrics["epoch"]}.pth'
+      #ckpt_file_name = f'{job_id}_e{best_val_metrics["epoch"]}.pth'
       chck_save_path = os.path.join(chck_folder, ckpt_file_name)
       save_checkpoint(model, optimizer, epoch, chck_save_path)
 
