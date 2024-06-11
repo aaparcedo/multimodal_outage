@@ -66,9 +66,10 @@ class BlackMarbleDataset(Dataset):
     def __getitem__(self, idx):
         past_image_list = []
         future_image_list = []
-        past_julian_day_list = []
-        future_julian_day_list = []
- 
+        #past_julian_day_list = []
+        #future_julian_day_list = []
+        time_embeds_list = []
+
         # Fetch images for the start_index days period
         for day in range(self.start_index):
             past_days_county_image_list = []  # Hold images for one day from all counties
@@ -81,8 +82,8 @@ class BlackMarbleDataset(Dataset):
                 future_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
 
-                past_julian_day = get_julian_day_from_filename(past_image_path, tensor=True)
-                future_julian_day = get_julian_day_from_filename(future_image_path, tensor=True)
+                #past_julian_day = get_julian_day_from_filename(past_image_path, tensor=True)
+                #future_julian_day = get_julian_day_from_filename(future_image_path, tensor=True)
 
                 past_image = Image.open(past_image_path).convert('L')
                 future_image = Image.open(future_image_path).convert('L')
@@ -93,31 +94,43 @@ class BlackMarbleDataset(Dataset):
 
                 past_days_county_image_list.append(past_image)
                 future_days_county_image_list.append(future_image)
-            
+
+            time_embed = generate_Date2Vec(past_image_path)
+            time_embeds_list.append(time_embed)
 
             # Stack all county images for one day
             past_image_list.append(torch.stack(past_days_county_image_list))
             future_image_list.append(torch.stack(future_days_county_image_list))
-            past_julian_day_list.append(past_julian_day)
-            future_julian_day_list.append(future_julian_day)
-
+            #past_julian_day_list.append(past_julian_day)
+            #future_julian_day_list.append(future_julian_day)
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
-        past_S_days_tensor = torch.tensor(past_julian_day_list).view(1, 7, 1).repeat(67, 1, 1)
- 
+        #past_S_days_tensor = torch.tensor(past_julian_day_list).view(1, 7, 1).repeat(67, 1, 1)
+        time_embeds = torch.stack(time_embeds_list).view(1, 7, 64).repeat(67, 1, 1) # [67, 7, 64] 
+
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
-        # [S, T, N, C, W, H], e.g., if batch_size = 1 and num_timesteps = 7, [1, 7, 67, 3, 128, 128]
-        # new size with julian day should be [1, 7, 7, 67, 3, 128, 128]
-        return (past_image_tensor, future_image_tensor, past_S_days_tensor)
+        return (past_image_tensor, future_image_tensor, time_embeds) 
+        #return (past_image_tensor, future_image_tensor, past_S_days_tensor)
 
-def add_dayofyear_feature(past_image_tensor, future_image_tensor, past_julian_day_list, future_julian_day_list):
+from Model import Date2VecConvert
+d2v = Date2VecConvert(model_path="./d2v_model/d2v_98291_17.169918439404636.pth")
 
-  for idx, (S_julianday, T_julianday) in enumerate(zip(past_julian_day_list, future_julian_day_list)):
-    past_image_tensor[idx, :, :, :, :] = S_julianday
-    future_image_tensor[idx, :, :, :, :] = T_julianday
+def generate_Date2Vec(filepath):
+  """
+  Generates time embeddings given a list of dates.
+  Paper: https://arxiv.org/abs/1907.05321
+  Code: https://github.com/ojus1/Date2Vec
+  """
 
-  return past_image_tensor, future_image_tensor
+  year, month, day = filepath.split('/')[-1].split('.')[0].split('_')
+  
+  x = torch.Tensor([[00, 00, 00, int(year), int(month), int(day)]]).float()
+
+  time_embeds = d2v(x)
+  return time_embeds
+
+
 
 def get_julian_day_from_filename(filename, tensor=True, normalize=True):
   """
@@ -382,36 +395,6 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
 
         image.save(image_save_path)
 
-def visualize_test_results_with_reals(preds, reals, save_dir, dataset_dir, dataset):
-    """
-    Save image results from modified unet predictions and real images.
-
-    Parameters:
-    - preds (torch.Tensor): output predictions from modified unet model
-    - reals (torch.Tensor): ground truth real images
-    - save_dir (str): directory to save images
-    - dataset_dir (str): directory of dataset images
-    - dataset (BlackMarbleDataset): dataset object  
-
-    Returns:
-    - N/A
-    """
-    county_names = sorted(os.listdir(dataset_dir))
-    preds_save_dir = os.path.join(save_dir, 'preds')  # /logs/job_id/test_preds/
-    reals_save_dir = os.path.join(save_dir, 'reals')  # /logs/job_id/test_reals/
-    os.makedirs(preds_save_dir, exist_ok=True)
-    os.makedirs(reals_save_dir, exist_ok=True)
-
-    for pred_idx in range(preds.shape[0]):
-        for horizon in range(preds.shape[2]):
-            horizon_folder_path_preds = os.path.join(preds_save_dir, str(horizon + 1))  # /logs/job_id/test_preds/horizon/
-        #print(f"Unexpected keys: {unexpected_keys}")
-    #model.load_state_dict(checkpoint['state_dict'],strict=False)
-    if optimizer:
-        optimizer.load_state_dict(checkpoint['optimizer'])
-    start_epoch = checkpoint['epoch']
-    print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
-    return model
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
     state = {
