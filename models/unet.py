@@ -34,7 +34,8 @@ image_dimension = 128
 batch_size = 4
 n_counties = 67
 n_timestep = 7
-feature_vector_size = 16
+feature_vector_size = 256
+compression_factor = 4
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -132,13 +133,12 @@ class Contraction(nn.Module):
 class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
+        self.compression_factor = compression_factor
         self.downsized_image_dimension = image_dimension / 16
         self.first_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
-        self.fc1 = nn.Linear(self.first_layer_size, 1024)
+        self.fc1 = nn.Linear(self.first_layer_size, int(self.first_layer_size / self.compression_factor))
         self.dropout1 = nn.Dropout(p=0.3)
-        self.fc2 = nn.Linear(1024, 256)
-        self.dropout2 = nn.Dropout(p=0.3)
-        self.fc3 = nn.Linear(256, feature_vector_size)
+        self.fc2 = nn.Linear(int(self.first_layer_size / self.compression_factor), feature_vector_size)
 
     def forward(self, input):
         wave_net_input = []
@@ -147,8 +147,6 @@ class Encoder(nn.Module):
             x = torch.relu(self.fc1(input[county]))
             x = self.dropout1(x)
             x = torch.relu(self.fc2(x))
-            x = self.dropout2(x)
-            x = self.fc3(x)
             wave_net_input.append(x)
 
 
@@ -158,15 +156,12 @@ class Encoder(nn.Module):
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
-        self.downsized_image_dimension = int(image_dimension / 16)
-        self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64)
-        self.fc1 = nn.Linear(feature_vector_size, 64)
+        self.compression_factor = compression_factor
+        self.downsized_image_dimension = int(image_dimension / 16) # 8
+        self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64) # 4096
+        self.fc1 = nn.Linear(feature_vector_size, int(feature_vector_size * self.compression_factor))
         self.dropout1 = nn.Dropout(p=0.3)
-        self.fc2 = nn.Linear(64, 256)
-        self.dropout2 = nn.Dropout(p=0.3)
-        self.fc3 = nn.Linear(256, 1024)
-        self.dropout3 = nn.Dropout(p=0.3)
-        self.fc4 = nn.Linear(1024, self.output_layer_size)
+        self.fc2 = nn.Linear(int(feature_vector_size * self.compression_factor), self.output_layer_size)
 
     def forward(self, input):
         expansion_input = []
@@ -175,10 +170,6 @@ class Decoder(nn.Module):
             x = torch.relu(self.fc1(input[county]))
             x = self.dropout1(x)
             x = torch.relu(self.fc2(x))
-            x = self.dropout2(x)
-            x = torch.relu(self.fc3(x))
-            x = self.dropout3(x)
-            x = self.fc4(x)
             expansion_input.append(x)
 
         expansion_input = torch.stack(expansion_input)
