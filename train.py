@@ -9,6 +9,7 @@ import torch.nn as nn
 from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, print_memory_usage, plot_training_history, save_checkpoint
 from models.unet import Modified_UNET
 import pandas as pd
+import torch.optim.lr_scheduler as lr_scheduler
 
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
@@ -22,7 +23,7 @@ train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Time
 def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
   model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
-
+  print(model)
   print(f'device: {device}')
 
   # Load dataset
@@ -46,6 +47,8 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   # Set up optimizer and custom loss function
   optimizer = optim.Adam(model.parameters(), lr=0.001)
   criterion = nn.MSELoss()  
+  #scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
+  scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
 
   # Alternative Benchmarks
   rmse = rmse_per_pixel
@@ -64,7 +67,7 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
   }
 
   best_val_metrics = {'loss': float('inf'), 'rmse':  float('inf'), 'mae':  float('inf'), 'mape':  float('inf'), 'epoch': 0}
-
+  print(f'total epochs: {epochs}')
   # Begin training
   for epoch in range(epochs):
     model.train()
@@ -74,10 +77,12 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_mape = 0
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
       for item in train_loader:
-        past_tensor, future_tensor, past_S_days_tensor = item
+        past_tensor, future_tensor, time_embeds = item
+
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
-        preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
+        preds_tensor = model(past_tensor, time_embeds.to(device))
         loss = criterion(preds_tensor, future_tensor)
+  #      print_memory_usage()
 
         with torch.no_grad():
           rmse_loss = rmse(preds_tensor, future_tensor)
@@ -139,7 +144,9 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_val_metrics['train_mape'].append(avg_train_mape_loss)
     train_val_metrics['val_mape'].append(avg_val_mape_loss)
 
-    print(f'\nValidation Epoch {epoch + 1}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
+    scheduler.step(avg_val_loss)
+
+    print(f'\nValidation Epoch {epoch + 1}, Learning Rate: {optimizer.param_groups[0]["lr"]}: Loss (MSE)={avg_val_loss:.4f}, RMSE={avg_val_rmse_loss:.4f}, MAPE={avg_val_mape_loss:.4f}, MAE={avg_val_mae_loss:.4f}\n')
 
     chck_folder = os.path.join(f'logs/{job_id}', 'ckpts')
     os.makedirs(chck_folder, exist_ok=True)
