@@ -6,7 +6,7 @@ import os
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results, visualize_test_results_with_reals
+from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results
 from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
@@ -59,10 +59,10 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   
   with torch.no_grad():
     for item in test_loader:
-      past_tensor, future_tensor, past_S_days_tensor = item
-      past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
+      past_tensor, future_tensor, time_embeds, loc_embeds = item
 
-      preds_tensor = model(past_tensor, past_S_days_tensor.to(device))
+      past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
+      preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
 
       loss = criterion(preds_tensor, future_tensor)
       test_rmse_loss = rmse(preds_tensor, future_tensor)
@@ -97,7 +97,7 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
 
   if visualize:
     #visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
-    visualize_test_results_with_reals(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
+    visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
   h_mae_hist = []

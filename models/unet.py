@@ -34,8 +34,10 @@ image_dimension = 128
 batch_size = 4
 n_counties = 67
 n_timestep = 7
-feature_vector_size = 256
-compression_factor = 4
+feature_vector_size = 1024
+time_embed_size = 64
+loc_embed_size = 256
+compression_factor = 2
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -207,9 +209,11 @@ class Modified_UNET(nn.Module):
         super(Modified_UNET, self).__init__()
         self.contraction = Contraction(input_channels)
         self.encoder = Encoder()
+        self.st_gnn_in_dim = feature_vector_size + loc_embed_size + time_embed_size
+
 
         if st_gnn == 'gwnet':
-          self.st_gnn = gwnet(device='cuda', in_dim=feature_vector_size+64, out_dim=feature_vector_size)
+          self.st_gnn = gwnet(device='cuda', in_dim=self.st_gnn_in_dim, out_dim=feature_vector_size)
         elif st_gnn == 'dcrnn':
           self.st_gnn = DCRNNModel(**default_kwargs).cuda()
         elif st_gnn == 'gman':
@@ -220,19 +224,20 @@ class Modified_UNET(nn.Module):
         self.decoder = Decoder()
         self.expansion = Expansion(output_channels)
 
-    def forward(self, input, time_dim):
+    def forward(self, input, time_dim, loc_embeds):
      
         result = []
         for batch in range(input.shape[0]): 
-            #print(f'input shape: {input.shape}')
-            #print(f'time_dim shape: {time_dim.shape}')
+        #    print(f'input shape: {input.shape}')
+        #    print(f'time_dim shape: {time_dim.shape}')
             output = self.contraction(input[batch])
             output = self.encoder(output)
 
-            #print(f'output shape: {output.shape}')
-            #print(f'time_dim[batch] shape: {time_dim[batch].shape}')
-            output = torch.cat((output, time_dim[batch]), dim=-1)
-            #print(f'output shape (before st_gnn): {output.shape}')
+        #    print(f'output shape: {output.shape}')
+        #    print(f'time_dim[batch] shape: {time_dim[batch].shape}')
+        #    print(f'loc embeds shape: {loc_embeds.shape}')
+            output = torch.cat((output, time_dim[batch], loc_embeds[batch]), dim=-1)
+        #    print(f'output shape (before st_gnn): {output.shape}')
             output = self.st_gnn(output)
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps

@@ -9,8 +9,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
-#from normalization import normalize_and_transform_images
 
+loc_embeds_path = "fl_county_loc_embeds.pt"
+loc_embeds = torch.load(loc_embeds_path) # [67, 256]
 
 class BlackMarbleDataset(Dataset):
     def __init__(self, data_dir, size, case_study, start_index=7, transform=None):
@@ -19,6 +20,7 @@ class BlackMarbleDataset(Dataset):
         self.start_index = start_index
         self.county_names = sorted(os.listdir(data_dir))
         self.case_study = case_study
+        self.loc_embeds = loc_embeds
 
         # Sorting each county's images by date
         self.sorted_image_paths = {
@@ -66,8 +68,6 @@ class BlackMarbleDataset(Dataset):
     def __getitem__(self, idx):
         past_image_list = []
         future_image_list = []
-        #past_julian_day_list = []
-        #future_julian_day_list = []
         time_embeds_list = []
 
         # Fetch images for the start_index days period
@@ -81,9 +81,6 @@ class BlackMarbleDataset(Dataset):
                     county_path, self.sorted_image_paths[county][day + idx])
                 future_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
-
-                #past_julian_day = get_julian_day_from_filename(past_image_path, tensor=True)
-                #future_julian_day = get_julian_day_from_filename(future_image_path, tensor=True)
 
                 past_image = Image.open(past_image_path).convert('L')
                 future_image = Image.open(future_image_path).convert('L')
@@ -101,17 +98,16 @@ class BlackMarbleDataset(Dataset):
             # Stack all county images for one day
             past_image_list.append(torch.stack(past_days_county_image_list))
             future_image_list.append(torch.stack(future_days_county_image_list))
-            #past_julian_day_list.append(past_julian_day)
-            #future_julian_day_list.append(future_julian_day)
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
-        #past_S_days_tensor = torch.tensor(past_julian_day_list).view(1, 7, 1).repeat(67, 1, 1)
         time_embeds = torch.stack(time_embeds_list).view(1, 7, 64).repeat(67, 1, 1) # [67, 7, 64] 
+        loc_embeds = self.loc_embeds.unsqueeze(1).repeat(1, 7, 1).float()  # [67, 256] -> [67, 7, 256]
 
         # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
-        return (past_image_tensor, future_image_tensor, time_embeds) 
-        #return (past_image_tensor, future_image_tensor, past_S_days_tensor)
+        return (past_image_tensor, future_image_tensor, time_embeds, loc_embeds)
+        #return (past_image_tensor, future_image_tensor, time_embeds) 
+
 
 from Model import Date2VecConvert
 d2v = Date2VecConvert(model_path="./d2v_model/d2v_98291_17.169918439404636.pth")

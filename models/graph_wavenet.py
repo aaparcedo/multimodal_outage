@@ -37,7 +37,9 @@ image_dimension = 128
 batch_size = 4
 n_counties = 67
 n_timestep = 7 
-feature_vector_size = 256
+feature_vector_size = 1024
+loc_embed_size = 256
+time_embed_size = 64
 
 # Necessary for GWN:
 
@@ -183,7 +185,7 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
-        input = input.view(1, feature_vector_size + 64, 67, 7)
+        input = input.view(1, feature_vector_size + loc_embed_size + time_embed_size, 67, 7)
 
         in_len = input.size(3)
         if in_len<self.receptive_field:
