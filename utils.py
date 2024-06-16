@@ -1,5 +1,4 @@
 import torch
-
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import os
@@ -10,17 +9,14 @@ import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
 
-loc_embeds_path = "fl_county_loc_embeds.pt"
-loc_embeds = torch.load(loc_embeds_path) # [67, 256]
 
 class BlackMarbleDataset(Dataset):
-    def __init__(self, data_dir, size, case_study, start_index=7, transform=None):
+    def __init__(self, data_dir, size, case_study, horizon=7, transform=None):
         self.data_dir = data_dir
         self.size = size
-        self.start_index = start_index
+        self.horizon = horizon
         self.county_names = sorted(os.listdir(data_dir))
         self.case_study = case_study
-        self.loc_embeds = loc_embeds
 
         # Sorting each county's images by date
         self.sorted_image_paths = {
@@ -32,19 +28,6 @@ class BlackMarbleDataset(Dataset):
           )  for county in self.county_names
         }
  
-        #if self.size == 'S':
-        #  self.mean =  [0.4700, 0.5617, 0.5993]
-        #  self.std = [0.3471, 0.3139, 0.2206]
-        #elif self.size == 'M':
-        #  self.mean = [0.4993, 0.5872, 0.6155]
-        #  self.std = [0.3394, 0.3055, 0.2150]
-        #elif self.size == 'L':
-        #  self.mean = [0.5117, 0.5980, 0.6224]
-        #  self.std = [0.3353, 0.3013, 0.2123]
-        #else: #'XL'
-        #  self.mean = [0.5136, 0.5997, 0.6234]
-        #  self.std = [0.3353, 0.3012, 0.2122]
-  
         # ntl gray with no set upper bound
         self.mean = 0.10961227864027023
         self.std = 0.19739273190498352
@@ -55,7 +38,6 @@ class BlackMarbleDataset(Dataset):
             transforms.Normalize(mean=self.mean, std=self.std)
         ])
 
-
     def denormalize(self, tensor):
       mean = torch.tensor(self.mean).cuda()
       std = torch.tensor(self.std).cuda()
@@ -63,7 +45,7 @@ class BlackMarbleDataset(Dataset):
       return tensor * std + mean
 
     def __len__(self):
-        return len(self.sorted_image_paths[self.county_names[0]]) - self.start_index * 2
+        return len(self.sorted_image_paths[self.county_names[0]]) - self.horizon * 2
 
     def __getitem__(self, idx):
         past_image_list = []
@@ -71,7 +53,7 @@ class BlackMarbleDataset(Dataset):
         time_embeds_list = []
 
         # Fetch images for the start_index days period
-        for day in range(self.start_index):
+        for day in range(self.horizon):
             past_days_county_image_list = []  # Hold images for one day from all counties
             future_days_county_image_list = []
 
@@ -80,7 +62,7 @@ class BlackMarbleDataset(Dataset):
                 past_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx])
                 future_image_path = os.path.join(
-                    county_path, self.sorted_image_paths[county][day + idx +  self.start_index])
+                    county_path, self.sorted_image_paths[county][day + idx +  self.horizon])
 
                 past_image = Image.open(past_image_path).convert('L')
                 future_image = Image.open(future_image_path).convert('L')
@@ -102,11 +84,8 @@ class BlackMarbleDataset(Dataset):
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
         time_embeds = torch.stack(time_embeds_list).view(1, 7, 64).repeat(67, 1, 1) # [67, 7, 64] 
-        loc_embeds = self.loc_embeds.unsqueeze(1).repeat(1, 7, 1).float()  # [67, 256] -> [67, 7, 256]
 
-        # [batch_size, num_timesteps, num_nodes, num_channels, image_width, image_height]
-        return (past_image_tensor, future_image_tensor, time_embeds, loc_embeds)
-        #return (past_image_tensor, future_image_tensor, time_embeds) 
+        return (past_image_tensor, future_image_tensor, time_embeds) 
 
 
 from Model import Date2VecConvert
@@ -126,26 +105,6 @@ def generate_Date2Vec(filepath):
   time_embeds = d2v(x)
   return time_embeds
 
-
-
-def get_julian_day_from_filename(filename, tensor=True, normalize=True):
-  """
-  Parameters:
-  - filename (str): filename to infer date from (must be in '2012_01_01.jpg' format')
-  - tensor (bool): weather to return julian day as tensor 
-
-  Returns:
-  - julian_day
-  """
-  julian_day = pd.Timestamp(filename.split('/')[-1].split('.')[0].replace('_', '-')).dayofyear
-
-  if tensor:
-    torch.tensor(julian_day)
-
-  if normalize:
-    julian_day = (julian_day - 1) / (365 - 1)
-
-  return julian_day
 
 def find_case_study_dates(size, image_paths, case_study):
     
@@ -369,18 +328,25 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
   """
 
   county_names = sorted(os.listdir(dataset_dir))
-  preds_save_dir = os.path.join(save_dir, 'preds') # /logs/job_id/test_preds/
+  preds_save_dir = os.path.join(save_dir, 'preds')
+  reals_save_dir = os.path.join(save_dir, 'reals')
   os.makedirs(preds_save_dir, exist_ok=True)
+  os.makedirs(reals_save_dir, exist_ok=True)
+
   for pred_idx in range(preds.shape[0]):
     for horizon in range(preds.shape[2]):
+
       horizon_folder_path = os.path.join(preds_save_dir, str(horizon + 1)) # /logs/job_id/test_preds/horizon/
+      reals_horizon_folder_path = os.path.join(reals_save_dir, str(horizon + 1))
+
       os.makedirs(horizon_folder_path, exist_ok=True)
+      os.makedirs(reals_horizon_folder_path, exist_ok=True)
+
       for county_idx in range(preds.shape[1]):
         county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx]) # /logs/job_id/test_preds/horizon/county/
         os.makedirs(county_horizon_folder_path, exist_ok=True)
 
         image_name = dataset.sorted_image_paths[county_names[county_idx]][pred_idx + horizon + dataset.start_index]
-        
         image_save_path = os.path.join(county_horizon_folder_path, image_name)
 
         image_tensor = preds[pred_idx, county_idx, horizon]
@@ -390,6 +356,17 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
         image = Image.fromarray(image_np_uint8, mode='L')
 
         image.save(image_save_path)
+        
+        if reals is not None:
+          reals_county_horizon_folder_path = os.path.join(reals_horizon_folder_path, county_names[county_idx])
+          os.makedirs(reals_county_horizon_folder_path, exist_ok=True)
+          real_image_save_path = os.path.join(reals_county_horizon_folder_path, image_name)
+          image_tensor = reals[pred_idx, county_idx, horizon]
+          image_np = dataset.denormalize(image_tensor[0]).cpu().numpy()
+          image_np = np.clip(image_np, 0, 1)
+          image_np_uint8 = (image_np * 255).astype(np.uint8)
+          image = Image.fromarray(image_np_uint8, mode='L')
+          image.save(real_image_save_path)
 
 
 def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
