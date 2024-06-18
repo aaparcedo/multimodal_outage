@@ -33,18 +33,18 @@ def load_adj(filename, adjtype):
 
 # Hyperparameters
 
+
 image_dimension = 128
 batch_size = 4
 n_counties = 67
-n_timestep = 7 
-feature_vector_size = 1024
+feature_vector_size = 256
 loc_embed_size = 256
 time_embed_size = 64
 
 # Necessary for GWN:
 
 randomadj = True
-adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl_k1.csv"
+adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl.csv"
 adjtype = "doubletransition"
 
 sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
@@ -98,13 +98,14 @@ class gcn(nn.Module):
         return h
 
 class gwnet(nn.Module):
-    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size-1,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
+    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size-1, horizon=1, residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
         super(gwnet, self).__init__()
         self.dropout = dropout
         self.blocks = blocks
         self.layers = layers
         self.gcn_bool = gcn_bool
         self.addaptadj = addaptadj
+        self.horizon = horizon
 
         self.filter_convs = nn.ModuleList()
         self.gate_convs = nn.ModuleList()
@@ -185,7 +186,7 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
-        input = input.view(1, feature_vector_size + loc_embed_size + time_embed_size, 67, 7)
+        input = input.view(1, feature_vector_size + time_embed_size, 67, self.horizon)
 
         in_len = input.size(3)
         if in_len<self.receptive_field:
@@ -251,6 +252,6 @@ class gwnet(nn.Module):
         x = F.relu(skip)
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
-        x = x.view(67, 7, feature_vector_size)
+        x = x.view(67, self.horizon, feature_vector_size)
         return x
 
