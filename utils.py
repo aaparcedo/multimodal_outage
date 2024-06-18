@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.sparse as sp
 from scipy.sparse import linalg
-
+import pickle
 
 class BlackMarbleDataset(Dataset):
     def __init__(self, data_dir, size, case_study, horizon=7, transform=None):
@@ -28,13 +28,11 @@ class BlackMarbleDataset(Dataset):
           )  for county in self.county_names
         }
  
-        # ntl gray with no set upper bound
-        self.mean = 0.10961227864027023
-        self.std = 0.19739273190498352
+        self.mean = 588.9268188476562
+        self.std = 1837.916015625
 
         self.transform = transform if transform is not None else transforms.Compose([
             transforms.Resize((128, 128)),
-            transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.std)
         ])
 
@@ -43,6 +41,12 @@ class BlackMarbleDataset(Dataset):
       std = torch.tensor(self.std).cuda()
 
       return tensor * std + mean
+
+    def open_pickle_as_tensor(self, image_path):
+      with open(image_path, 'rb') as file:
+        data = pickle.load(file)
+      data_tensor = torch.Tensor(data["Gap_Filled_DNB_BRDF-Corrected_NTL"].values).unsqueeze(0)
+      return data_tensor
 
     def __len__(self):
         return len(self.sorted_image_paths[self.county_names[0]]) - self.horizon * 2
@@ -64,8 +68,8 @@ class BlackMarbleDataset(Dataset):
                 future_image_path = os.path.join(
                     county_path, self.sorted_image_paths[county][day + idx +  self.horizon])
 
-                past_image = Image.open(past_image_path).convert('L')
-                future_image = Image.open(future_image_path).convert('L')
+                past_image = self.open_pickle_as_tensor(past_image_path)
+                future_image = self.open_pickle_as_tensor(future_image_path)
 
                 if self.transform:
                     past_image = self.transform(past_image)
@@ -83,7 +87,7 @@ class BlackMarbleDataset(Dataset):
 
         past_image_tensor = torch.stack(past_image_list)
         future_image_tensor = torch.stack(future_image_list)
-        time_embeds = torch.stack(time_embeds_list).view(1, 7, 64).repeat(67, 1, 1) # [67, 7, 64] 
+        time_embeds = torch.stack(time_embeds_list).view(1, self.horizon, 64).repeat(67, 1, 1) # [67, horizon, 64] 
 
         return (past_image_tensor, future_image_tensor, time_embeds) 
 
