@@ -17,7 +17,8 @@ torch.backends.cudnn.benchmark = False
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 ntl_gray_dir =  "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
-dir_image = ntl_gray_dir
+ntl_gap_fill_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/original_gap_fill_rectangle"
+dir_image = ntl_gap_fill_dir
 
 def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
 
@@ -25,7 +26,10 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
   train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
   train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
 
-  case_study_events = [(train_ia_id, test_m), (train_m_id, test_ia), (train_ia_m, test_id)]
+  #case_study_events = [(train_ia_id, test_m), (train_m_id, test_ia), (train_ia_m, test_id)]
+  case_study_events = [(train_ia_id, test_m)]
+
+
 
   # all metrics
   metrics = {'train': {}, 'val': {}, 'test': {}}
@@ -41,8 +45,8 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
 
   for case_train, case_test in case_study_events:
  
-    train_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_train, start_index=horizon)
-    test_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_test, start_index=horizon)
+    train_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_train, horizon=horizon)
+    test_dataset = BlackMarbleDataset(dir_image, size=size, case_study=case_test, horizon=horizon)
 
     print(f'Train events: {case_train.keys()}, Test event: {case_test.keys()}')
  

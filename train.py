@@ -22,7 +22,7 @@ train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Time
 
 def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job_id='test', ckpt_file_name='test', device='cuda', dataset=None):
 
-  model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn, horizon=horizon, input_channels=1, output_channels=1).to(device=device)
   print(model)
   print(f'device: {device}')
 
@@ -77,10 +77,13 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
     train_mape = 0
     with tqdm(total=n_train, desc=f'Epoch {epoch}/{epochs}', unit='day') as pbar:
       for item in train_loader:
-        past_tensor, future_tensor, time_embeds, loc_embeds = item
-
+        #past_tensor, future_tensor, time_embeds, loc_embeds = item
+        
+        past_tensor, future_tensor, time_embeds = item
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
-        preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
+        preds_tensor = model(past_tensor, time_embeds.to(device))
+        #preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
+
         loss = criterion(preds_tensor, future_tensor)
   #      print_memory_usage()
 
@@ -109,10 +112,11 @@ def train_model(st_gnn='gwnet', epochs=1, batch_size=1, horizon=7, size='S', job
 
     with torch.no_grad():
       for item in val_loader:
-        past_tensor, future_tensor, time_embeds, loc_embeds = item
-
+        #past_tensor, future_tensor, time_embeds, loc_embeds = item
+        past_tensor, future_tensor, time_embeds = item
         past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
-        preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
+        preds_tensor = model(past_tensor, time_embeds.to(device))
+        #preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
 
         loss = criterion(preds_tensor, future_tensor)
         val_rmse_loss = rmse(preds_tensor, future_tensor)

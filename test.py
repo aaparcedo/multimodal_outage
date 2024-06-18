@@ -11,6 +11,11 @@ from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
 pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
 ntl_gray_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
@@ -27,12 +32,12 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   ckpt_folder_path = os.path.join(job_id_folder_path, 'ckpts')
   ckpt_path = os.path.join(ckpt_folder_path, ckpt_file_name)
 
-  model = Modified_UNET(st_gnn=st_gnn, input_channels=1, output_channels=1).to(device=device)
+  model = Modified_UNET(st_gnn=st_gnn, horizon=horizon, input_channels=1, output_channels=1).to(device=device)
   model = load_checkpoint(ckpt_path, model)
 
   # Load dataset
   if dataset is None:  
-    dataset = BlackMarbleDataset(dir_image, size=size, case_study=test_ia, start_index=horizon)
+    dataset = BlackMarbleDataset(dir_image, size=size, case_study=test_m, start_index=horizon)
 
   print(f'Size of test dataset: {len(dataset)}')
 
@@ -59,10 +64,13 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   
   with torch.no_grad():
     for item in test_loader:
-      past_tensor, future_tensor, time_embeds, loc_embeds = item
+      #past_tensor, future_tensor, time_embeds, loc_embeds = item
 
+      past_tensor, future_tensor, time_embeds = item
       past_tensor, future_tensor = (tensor.to(device).permute(0, 2, 1, 3, 4, 5) for tensor in (past_tensor, future_tensor))
-      preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
+      preds_tensor = model(past_tensor, time_embeds.to(device))
+
+      #preds_tensor = model(past_tensor, time_embeds.to(device), loc_embeds.to(device))
 
       loss = criterion(preds_tensor, future_tensor)
       test_rmse_loss = rmse(preds_tensor, future_tensor)
@@ -96,7 +104,6 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   reals = torch.cat(real, dim=0) 
 
   if visualize:
-    #visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
     visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
