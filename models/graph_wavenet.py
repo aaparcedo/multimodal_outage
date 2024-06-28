@@ -8,14 +8,53 @@ import sys
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
+import pandas as pd
+
+def load_adj(filename, adjtype):
+
+    # Load the adjacency matrix from csv file
+
+    if (filename.endswith('.csv')):
+        adj_mx = pd.read_csv(filename, index_col=0)
+        adj_mx = adj_mx.values
+    else:
+        sensor_ids, sensor_id_to_ind, adj_mx = load_pickle(filename)
+
+    if adjtype == "doubletransition":
+        adj = [np.diag(np.ones(adj_mx.shape[0])).astype(np.float32)]
+    else:
+        error = 0
+        assert error, "adj type not defined"
+
+    if (filename.endswith('.csv')):
+        return None, None, adj
+    else:
+        return sensor_ids, sensor_id_to_ind, adj
 
 # Hyperparameters
+
 
 image_dimension = 128
 batch_size = 4
 n_counties = 67
-n_timestep = 7 
-feature_vector_size = 16
+feature_vector_size = 256
+loc_embed_size = 256
+time_embed_size = 64
+
+# Necessary for GWN:
+
+randomadj = True
+adjdata = "/home/aaparcedo/multimodal_outage/data/graph/adj_mx_fl.csv"
+adjtype = "doubletransition"
+
+sensor_ids, sensor_id_to_ind, adj_mx = load_adj(adjdata,adjtype)
+default_supports = [torch.tensor(i).to('cuda') for i in adj_mx]
+
+if randomadj:
+  adjinit = None
+else:
+  adjinit = supports[0]
+
 
 # Graph WaveNet
 class nconv(nn.Module):
@@ -59,13 +98,14 @@ class gcn(nn.Module):
         return h
 
 class gwnet(nn.Module):
-    def __init__(self, device, num_nodes, dropout=0.3, supports=None, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=2,out_dim=12,residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
+    def __init__(self, device, num_nodes=n_counties, dropout=0.3, supports=default_supports, gcn_bool=True, addaptadj=True, aptinit=None, in_dim=feature_vector_size,out_dim=feature_vector_size-1, horizon=1, residual_channels=32,dilation_channels=32,skip_channels=256,end_channels=512,kernel_size=1,blocks=4,layers=2):
         super(gwnet, self).__init__()
         self.dropout = dropout
         self.blocks = blocks
         self.layers = layers
         self.gcn_bool = gcn_bool
         self.addaptadj = addaptadj
+        self.horizon = horizon
 
         self.filter_convs = nn.ModuleList()
         self.gate_convs = nn.ModuleList()
@@ -77,7 +117,7 @@ class gwnet(nn.Module):
         self.start_conv = nn.Conv2d(in_channels=in_dim,
                                     out_channels=residual_channels,
                                     kernel_size=(1,1))
-        self.supports = supports
+        self.supports = default_supports
 
         receptive_field = 1
 
@@ -109,11 +149,11 @@ class gwnet(nn.Module):
                 # dilated convolutions
                 self.filter_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                    out_channels=dilation_channels,
-                                                   kernel_size=(1, 1), dilation=new_dilation))
+                                                   kernel_size=(1, kernel_size), dilation=new_dilation))
 
                 self.gate_convs.append(nn.Conv2d(in_channels=residual_channels,
                                                  out_channels=dilation_channels,
-                                                 kernel_size=(1, 1),  dilation=new_dilation))
+                                                 kernel_size=(1, kernel_size),  dilation=new_dilation))
 
                 # 1x1 convolution for residual connection
                 self.residual_convs.append(nn.Conv2d(in_channels=dilation_channels,
@@ -146,7 +186,9 @@ class gwnet(nn.Module):
 
 
     def forward(self, input):
-        in_len = input.size(2)
+        input = input.view(1, feature_vector_size + time_embed_size, 67, self.horizon)
+
+        in_len = input.size(3)
         if in_len<self.receptive_field:
             x = nn.functional.pad(input,(self.receptive_field-in_len,0,0,0))
         else:
@@ -210,5 +252,6 @@ class gwnet(nn.Module):
         x = F.relu(skip)
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
+        x = x.view(67, self.horizon, feature_vector_size)
         return x
 
