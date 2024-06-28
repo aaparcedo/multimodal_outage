@@ -14,10 +14,7 @@ torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl/"
-pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
-ntl_gray_dir =  "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
-ntl_gap_fill_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/original_gap_fill_rectangle"
+ntl_gap_fill_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/original_gap_fill_rectangle_proximity"
 dir_image = ntl_gap_fill_dir
 
 def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, device):
@@ -28,8 +25,6 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
 
   #case_study_events = [(train_ia_id, test_m), (train_m_id, test_ia), (train_ia_m, test_id)]
   case_study_events = [(train_ia_id, test_m)]
-
-
 
   # all metrics
   metrics = {'train': {}, 'val': {}, 'test': {}}
@@ -62,6 +57,7 @@ def run_experiment(st_gnn, epochs, batch_size, horizon, size, job_id, num_runs, 
     run_val_rmse_hist = []
     run_val_mae_hist = []
     run_val_mape_hist = []
+
 
     run_test_loss_hist = []
     run_test_rmse_hist = []
