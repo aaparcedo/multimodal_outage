@@ -15,14 +15,31 @@ import random
 import time
 import concurrent.futures
 import xarray as xr
+from shapely import Polygon
 
 bearer = "eyJ0eXAiOiJKV1QiLCJvcmlnaW4iOiJFYXJ0aGRhdGEgTG9naW4iLCJzaWciOiJlZGxqd3RwdWJrZXlfb3BzIiwiYWxnIjoiUlMyNTYifQ.eyJ0eXBlIjoiVXNlciIsInVpZCI6ImFhcGFyY2VkbyIsImV4cCI6MTcxOTc3MzAxNywiaWF0IjoxNzE0NTg5MDE3LCJpc3MiOiJFYXJ0aGRhdGEgTG9naW4ifQ.gok0oSUdK3Ak4p9QSnuD8b3wCRizrjG-LCJMvmglB122IqK6BHPhEbgu9fohRYi15935n69_tC1gYO0nI_oNZauRzgvI1b1bf0fFAlrnnL9rKI7Jtlh9ECkAKRchidDYzb-ilSeMWLVuSBrEPbf9a4-XanbsoYlkSzBqmsZauuaaqnKyH1YNh5yFwd1MYkfP9ampmmiy2UTwW0sRbFSW2MWEe3go0ZLB2_qFKhnIXvSbIpP90JgPFa__eOu0wtOrLyKA286iRTU5tS562dFIffiZHK4nStLzTS45dY4ba1exYdGV4QLlPeMkON3rO-I9M-vq5Wd-XuQhCvxy5t5Fjw"
 
-ia_id_m_S_dates = ['2018_09_10.jpg', '2018_09_11.jpg', '2018_09_12.jpg', '2018_09_13.jpg', '2018_09_14.jpg', '2018_09_15.jpg', '2018_09_16.jpg', '2018_09_17.jpg', '2018_09_18.jpg',
-         '2018_09_19.jpg', '2018_09_20.jpg', '2018_09_21.jpg', '2018_09_22.jpg', '2018_09_23.jpg', '2018_09_24.jpg', '2018_09_25.jpg', '2018_09_26.jpg', '2018_09_27.jpg',
-         '2018_09_28.jpg', '2018_09_29.jpg', '2018_09_30.jpg', '2018_10_01.jpg', '2018_10_02.jpg', '2018_10_03.jpg', '2018_10_04.jpg', '2018_10_05.jpg', '2018_10_06.jpg', '2018_10_07.jpg', '2018_10_08.jpg', '2018_10_09.jpg', '2018_10_10.jpg', '2018_10_11.jpg', '2018_10_12.jpg', '2018_10_13.jpg', '2018_10_14.jpg', '2018_10_15.jpg', '2018_10_16.jpg', '2018_10_17.jpg', '2018_10_18.jpg', '2018_10_19.jpg', '2018_10_20.jpg', '2018_10_21.jpg', '2018_10_22.jpg', '2018_10_23.jpg', '2018_10_24.jpg', '2018_10_25.jpg', '2018_10_26.jpg', '2018_10_27.jpg', '2018_10_28.jpg', '2018_10_29.jpg', '2018_10_30.jpg', '2018_10_31.jpg', '2018_11_01.jpg', '2018_11_02.jpg', '2018_11_03.jpg', '2018_11_04.jpg', '2018_11_05.jpg', '2018_11_06.jpg', '2018_11_07.jpg', '2018_11_08.jpg', '2022_08_27.jpg', '2022_08_28.jpg', '2022_08_29.jpg', '2022_08_30.jpg', '2022_08_31.jpg', '2022_09_01.jpg', '2022_09_02.jpg', '2022_09_03.jpg', '2022_09_04.jpg', '2022_09_05.jpg', '2022_09_06.jpg', '2022_09_07.jpg', '2022_09_08.jpg', '2022_09_09.jpg', '2022_09_10.jpg', '2022_09_11.jpg', '2022_09_12.jpg', '2022_09_13.jpg', '2022_09_14.jpg', '2022_09_15.jpg', '2022_09_16.jpg', '2022_09_17.jpg', '2022_09_18.jpg', '2022_09_19.jpg', '2022_09_20.jpg', '2022_09_21.jpg', '2022_09_22.jpg', '2022_09_23.jpg', '2022_09_24.jpg', '2022_09_25.jpg', '2022_09_26.jpg', '2022_09_27.jpg', '2022_09_28.jpg', '2022_09_29.jpg', '2022_09_30.jpg', '2022_10_01.jpg', '2022_10_02.jpg', '2022_10_03.jpg', '2022_10_04.jpg', '2022_10_05.jpg', '2022_10_06.jpg', '2022_10_07.jpg', '2022_10_08.jpg', '2022_10_09.jpg', '2022_10_10.jpg', '2022_10_11.jpg', '2022_10_12.jpg', '2022_10_13.jpg', '2022_10_14.jpg', '2022_10_15.jpg', '2022_10_16.jpg', '2022_10_17.jpg', '2022_10_18.jpg', '2022_10_19.jpg', '2022_10_20.jpg', '2022_10_21.jpg', '2022_10_22.jpg', '2022_10_23.jpg', '2022_10_24.jpg', '2022_10_25.jpg', '2023_07_31.jpg', '2023_08_01.jpg', '2023_08_02.jpg', '2023_08_03.jpg', '2023_08_04.jpg', '2023_08_05.jpg', '2023_08_06.jpg', '2023_08_07.jpg', '2023_08_08.jpg', '2023_08_09.jpg', '2023_08_10.jpg', '2023_08_11.jpg', '2023_08_12.jpg', '2023_08_13.jpg', '2023_08_14.jpg', '2023_08_15.jpg', '2023_08_16.jpg', '2023_08_17.jpg', '2023_08_18.jpg', '2023_08_19.jpg', '2023_08_20.jpg', '2023_08_21.jpg', '2023_08_22.jpg', '2023_08_23.jpg', '2023_08_24.jpg', '2023_08_25.jpg', '2023_08_26.jpg', '2023_08_27.jpg', '2023_08_28.jpg', '2023_08_29.jpg', '2023_08_30.jpg', '2023_08_31.jpg', '2023_09_01.jpg', '2023_09_02.jpg', '2023_09_03.jpg', '2023_09_04.jpg', '2023_09_05.jpg', '2023_09_06.jpg', '2023_09_07.jpg', '2023_09_08.jpg', '2023_09_09.jpg', '2023_09_10.jpg', '2023_09_11.jpg', '2023_09_12.jpg', '2023_09_13.jpg', '2023_09_14.jpg', '2023_09_15.jpg', '2023_09_16.jpg', '2023_09_17.jpg', '2023_09_18.jpg', '2023_09_19.jpg', '2023_09_20.jpg', '2023_09_21.jpg', '2023_09_22.jpg', '2023_09_23.jpg', '2023_09_24.jpg', '2023_09_25.jpg', '2023_09_26.jpg', '2023_09_27.jpg', '2023_09_28.jpg']
 
-ia_id_m_S_dates = [date.split('.')[0].replace('_', '-') for date in ia_id_m_S_dates]
+train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
+train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
+train_ia_m, test_id = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}, {'h_idalia': pd.Timestamp('2023-08-30')}
+
+h_idalia_date = test_id['h_idalia']
+h_michael_date = test_m['h_michael']
+h_ian_date = test_ia['h_ian']
+
+date_90_days_before_idalia = h_idalia_date - pd.DateOffset(days=90)
+date_90_days_after_idalia = h_idalia_date + pd.DateOffset(days=90)
+
+date_90_days_before_michael = h_michael_date - pd.DateOffset(days=90)
+date_90_days_after_michael = h_michael_date + pd.DateOffset(days=90)
+
+date_90_days_before_ian = h_ian_date - pd.DateOffset(days=90)
+date_90_days_after_ian = h_ian_date + pd.DateOffset(days=90) 
+
+michael_date_range = pd.date_range(start=date_90_days_before_michael, end=date_90_days_after_michael, freq='D')
+ian_date_range = pd.date_range(start=date_90_days_before_ian, end=date_90_days_after_ian, freq='D')
+idalia_date_range = pd.date_range(start=date_90_days_before_idalia, end=date_90_days_after_idalia, freq='D')
 
 def find_available_dates(base_dir=None, county_dir=None):
     """
@@ -93,7 +110,6 @@ def calculate_average_month_ntl(daily_image, month_composites):
         monthly_ntl, axis=0, where=~np.isnan(monthly_ntl))
 
     return average_month_ntl
-    return daily_ntl, average_month_ntl
 
 def load_month_composites(county_name):
     """
@@ -116,26 +132,21 @@ def load_month_composites(county_name):
     return month_composites
 
 
-def download_monthly_composites(quality_flag):
+def download_monthly_composites():
     """
     Download all month files.
     Passes quality flag to Black Marble download function. 
-
-    Parameters:
-    - quality_flag (list): desired quality, e.g., [1, 255]
 
     Returns:
     - N/A
     """
 
-    county_names = get_county_names_from_state_gdf()
-
-    start_date = pd.Timestamp('2012-01-19')
-    end_date = pd.Timestamp('2024-04-17')
+    county_names = ["polk", "suwannee", "taylor", "volusia", "walton"]
+    start_date = pd.Timestamp('2018-06-01')
+    end_date = pd.Timestamp('2023-08-01')
 
     base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
-    # hq because quality_flag_rm=[2, 255]
-    flag_dataset_path = os.path.join(base_dataset_path, "hq/monthly")
+    flag_dataset_path = os.path.join(base_dataset_path, "hq/monthly_bbox")
     os.makedirs(flag_dataset_path, exist_ok=True)
 
     for county in county_names:
@@ -143,8 +154,7 @@ def download_monthly_composites(quality_flag):
         os.makedirs(flag_county_dataset_path, exist_ok=True)
 
         try:
-            monthly_dataset = download_county_raster(
-                county, quality_flag, 'MS', start_date, end_date)
+            monthly_dataset = download_county_raster(county, 'MS', start_date, end_date)
         except Exception as e:
             print(f"Error: {e}", flush=True)
             return
@@ -164,7 +174,7 @@ def get_gdf(county_name):
     return county_gdf
 
 
-def download_county_raster(county, quality_flag, freq, start_date, end_date=None):
+def download_county_raster(county, freq, start_date, end_date=None):
     """
     Downloads the satellite image (xarray) for a specified county, day, and quality_flag.
 
@@ -172,30 +182,34 @@ def download_county_raster(county, quality_flag, freq, start_date, end_date=None
     - county (str): name of the county
     - start_date (Timestamp) :
     - end_date (Timestamp) :
-    - quality_flag (list): desired quality flag, e.g., [2, 255]
     - freq (str): frequency of image (options 'D' or 'MS')
 
     Returns:
     raster (xarray): object of satellite image
     """
 
-    county_gdf = get_gdf(county)
-    dates = pd.date_range(
-        start_date, end_date if end_date else start_date, freq=freq)
+    gdf = get_gdf(county)
+    bbox = gdf.total_bounds
+    bbox_polygon = Polygon([ (bbox[0], bbox[1]), (bbox[2], bbox[1]), (bbox[2], bbox[3]), (bbox[0], bbox[3]) ])
+    bbox_gdf = gpd.GeoDataFrame(geometry=[bbox_polygon], crs=gdf.crs)
+
+    #dates = pd.date_range(start_date, end_date if end_date else start_date, freq=freq)
+    dates = ["06-01-2018", "07-01-2018", "08-01-2018", "09-01-2018", "05-01-2022", "06-01-2022", "07-01-2022", "08-01-2022", "04-01-2023", "05-01-2023", "06-01-2023"
+]
+    dates = [pd.Timestamp(date) for date in dates]
 
     if freq == 'D':
         product_id = "VNP46A2"
-        #variable = "DNB_BRDF-Corrected_NTL"
         variable = "Gap-Filled-DNB_BRDF-Corrected_NTL"
     elif freq == 'MS':
         product_id = "VNP46A3"
         variable = "NearNadir_Composite_Snow_Free"
     else:
-        print("Pick a valid time frequency, i.e., 'D' or 'M'")
+        print("Pick a valid time frequency, i.e., 'D' or 'MS'")
 
-    raster = bm_raster(county_gdf, product_id=product_id, date_range=dates,
-                       bearer=bearer, variable=variable, quality_flag_rm=quality_flag)
-
+    raster = bm_raster(bbox_gdf, product_id=product_id, date_range=dates,
+                       bearer=bearer, variable=variable, quality_flag_rm=[255])
+    print('finished download')
     return raster
 
 
@@ -219,34 +233,36 @@ def download_missing_dates(dataset_county_path):
 
     return inverse_dates
 
+
 def big_download_fl_county_raster():
     """
     Parameters:
 
-
-
     Returns:
     - N/A
     """
-    base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
-    flag_dataset_path = os.path.join(base_dataset_path, "hq/original_latest_hq_retrieval")
-    county_names = ['lee', 'holmes', 'pinellas', 'seminole', 'jefferson', 'gadsden', 'desoto', 'hendry', 'suwannee', 'levy', 'franklin', 'hernando', 'flagler', 'orange', 'dixie']
-    #county_names = ['liberty', 'putnam', 'taylor', 'okeechobee', 'jackson', 'charlotte', 'indian_river', 'pasco', 'walton', 'sumter', 'osceola', 'gilchrist']
-    #county_names = ['wakulla', 'leon', 'monroe', 'saint_lucie', 'madison', 'alachua', 'clay', 'citrus', 'nassau', 'martin', 'broward', 'escambia', 'baker']
-    #county_names = ['hillsborough', 'manatee', 'lafayette', 'gulf', 'glades', 'highlands', 'calhoun', 'duval', 'marion', 'santa_rosa', 'volusia', 'sarasota', 'washington']
-    #county_names = ['hardee', 'bay', 'bradford', 'columbia', 'palm_beach', 'union', 'collier', 'hamilton', 'miami_dade', 'polk', 'okaloosa', 'saint_johns', 'lake', 'brevard']
+    dates = michael_date_range.append(ian_date_range).append(idalia_date_range)
 
+    base_dataset_path = '/groups/mli/multimodal_outage/data/black_marble'
+    flag_dataset_path = os.path.join(base_dataset_path, "hq/original_gap_fill_rectangle_proximity")
+
+    county_names = ['bay']
+    #county_names = ['liberty', 'union', 'franklin', 'gadsden', 'jefferson', 'washington', 'manatee', 'collier', 'columbia', 'taylor', 'jackson', 'suwannee'] 
+    #county_names = ['nassau', 'santa_rosa', 'saint_johns', 'volusia', 'sarasota', 'wakulla', 'bradford', 'monroe', 'lafayette', 'clay']
 
     for county in county_names:
         flag_county_dataset_path = os.path.join(flag_dataset_path, county)
         os.makedirs(flag_county_dataset_path, exist_ok=True)
 
         gdf = get_gdf(county)
-        dates = ia_id_m_S_dates
+        bbox = gdf.total_bounds
+        bbox_polygon = Polygon([ (bbox[0], bbox[1]), (bbox[2], bbox[1]), (bbox[2], bbox[3]), (bbox[0], bbox[3]) ]) 
+        bbox_gdf = gpd.GeoDataFrame(geometry=[bbox_polygon], crs=gdf.crs)
+ 
         try:
             #daily_dataset = bm_raster(gdf, product_id="VNP46A2", date_range=dates,
             #                          bearer=bearer, variable="Gap_Filled_DNB_BRDF-Corrected_NTL", quality_flag_rm=[255])
-            daily_dataset = bm_raster(gdf, product_id="VNP46A2", date_range=dates, bearer=bearer, variable="Latest_High_Quality_Retrieval")
+            daily_dataset = bm_raster(bbox_gdf, product_id="VNP46A2", date_range=dates, bearer=bearer, variable="Gap_Filled_DNB_BRDF-Corrected_NTL", quality_flag_rm=[])
         except Exception as e:
             print(f"Error for {county}: {e}", flush=True)
             continue

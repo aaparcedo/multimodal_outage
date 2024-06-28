@@ -27,9 +27,10 @@ class BlackMarbleDataset(Dataset):
             case_study=case_study  
           )  for county in self.county_names
         }
- 
-        self.mean = 588.9268188476562
-        self.std = 1837.916015625
+        
+        self.mean = 3.201447427712248
+        self.std = 10.389727592468262
+
 
         self.transform = transform if transform is not None else transforms.Compose([
             transforms.Resize((128, 128)),
@@ -45,7 +46,9 @@ class BlackMarbleDataset(Dataset):
     def open_pickle_as_tensor(self, image_path):
       with open(image_path, 'rb') as file:
         data = pickle.load(file)
-      data_tensor = torch.Tensor(data["Gap_Filled_DNB_BRDF-Corrected_NTL"].values).unsqueeze(0)
+      data_np = data["Gap_Filled_DNB_BRDF-Corrected_NTL"].values
+      data_np[data_np == 6.5535e+03] = 0
+      data_tensor = torch.Tensor(data_np).unsqueeze(0)
       return data_tensor
 
     def __len__(self):
@@ -144,28 +147,6 @@ def find_case_study_dates(size, image_paths, case_study):
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
     return filtered_image_paths
 
-
-def mse_per_pixel(x, y):
-    squared_diff = (x  - y) ** 2
-    total_mse = torch.mean(squared_diff)
-    return total_mse
-
-
-def rmse_per_pixel(x, y):
-    squared_diff = (x - y) ** 2
-    total_rmse = torch.sqrt(torch.mean(squared_diff))
-    return total_rmse
-
-
-def mae_per_pixel(x, y):
-    error = x - y
-    absolute_error = torch.abs(error)
-    total_mae = torch.mean(absolute_error)
-    return total_mae
-
-
-def mape_per_pixel(x, y, epsilon=1e-8):
-    return torch.mean(torch.abs((x - y) / (x + epsilon)))
 
 # DCRNN utilities: 
 
@@ -317,7 +298,164 @@ def plot_error_metrics(runs_metrics, save_path):
 
     plt.savefig(save_path)
 
-def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
+def ntl_tensor_to_np(ntl, dataset=None, denorm=True):
+  if denorm:
+    ntl = dataset.denormalize(ntl).cpu()
+  
+  ntl_np = np.array(ntl)	
+  ntl_np = np.transpose(ntl_np, (0, 2, 1))
+  ntl_np = np.rot90(ntl_np, k=1, axes=(1, 2))
+  ntl_np = ntl_np[0, :, :]
+  return ntl_np
+
+def visualize_results_raster(preds, save_dir, save_folder, dataset_dir, dataset):
+  """
+  Save qualitative results from VST-GNN predictions.
+  """
+  
+  eid_path = os.path.dirname(os.path.dirname(save_dir))
+
+  county_names = sorted(os.listdir(dataset_dir))
+  preds_save_dir = os.path.join(eid_path, save_folder)
+  os.makedirs(preds_save_dir, exist_ok=True) 
+ 
+  case_study_county_idx = [2, 34, 36]
+ 
+  for pred_idx in range(preds.shape[0]):
+    for pred_horizon in range(preds.shape[2]):
+
+      pred_horizon_folder_path = os.path.join(preds_save_dir, str(pred_horizon + 1))
+      os.makedirs(pred_horizon_folder_path, exist_ok=True)
+
+      for county_idx in case_study_county_idx:
+        county_horizon_folder_path = os.path.join(pred_horizon_folder_path, county_names[county_idx])
+        os.makedirs(county_horizon_folder_path, exist_ok=True)
+
+        pred_input_filename = dataset.sorted_image_paths[county_names[county_idx]][pred_idx + pred_horizon + dataset.horizon].split('.')[0]
+        pred_save_path = os.path.join(county_horizon_folder_path, pred_input_filename)
+
+        pred = preds[pred_idx, county_idx, pred_horizon]
+        pred_np = ntl_tensor_to_np(pred, dataset)
+
+        fig, ax = plt.subplots(figsize=(10, 10), dpi=300)
+        c = ax.pcolormesh(pred_np, shading='auto', cmap="cividis")
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.axis("off")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.tight_layout()
+        plt.savefig(pred_save_path, bbox_inches='tight')
+        plt.close()
+
+
+def get_percent_of_normal_ntl(ntl, filename, county_name):
+  """
+  ntl (np.array): radiance data
+  filename (str): filename to find correct "normal", i.e., look up the correct month
+  county_name (str):
+  """
+  
+  month_composites = load_month_composites(county_name)
+  m_ntl = calculate_average_month_ntl(filename, month_composites)
+  pon_ntl = 100 * ( (ntl + 1) / (m_ntl + 1) )
+  return pon_ntl
+  
+
+def calculate_average_month_ntl(filename, month_composites):
+  """
+  Calculates the average monthly composite of the last three months from a given date.
+
+  Parameters:
+  - filename (str):
+  - month_composites (xarray.Dataset): object containing necessary monthly composites
+
+  Returns:
+  avg_month_ntl (np.ndarray): represents the last 3 month average ntl
+  """
+
+  date = pd.Timestamp(filename.split('.')[0].replace('_', '-'))
+  transform = transforms.Resize((128, 128))
+
+  if date.year == 2018: 
+    month_list = ['2018-06-01', '2018-07-01', '2018-08-01']
+  elif date.year == 2022:
+    month_list = ['2022-06-01', '2022-07-01', '2022-08-01']
+  elif date.year == 2023:
+    month_list = ['2023-04-01', '2023-05-01', '2023-06-01']
+  else:
+    print('Invalid date')
+
+  monthly_ntl = []
+  for month in month_list:
+    month_ntl = month_composites["NearNadir_Composite_Snow_Free"].sel(time=month).values
+    month_ntl[month_ntl == 6.5535e+03] = 0
+     
+    # convert to tensor to use transforms.Resize -> convert back to np
+    month_ntl_tensor = transform(torch.Tensor(month_ntl).unsqueeze(0))
+    month_ntl = ntl_tensor_to_np(month_ntl_tensor, denorm=False)
+    monthly_ntl.append(month_ntl)
+
+  avg_month_ntl = np.mean(monthly_ntl, axis=0)
+ 
+  return avg_month_ntl
+
+
+def load_month_composites(county_name):
+  """
+  Loads all the available monthly composites into memory.
+
+  Parameters:
+  - county_name (str): name of county, e.g., 'orange'
+
+  Returns:
+  - month_composites (xarray.Dataset): dataset of monthly composites
+  """
+
+  base_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/monthly_bbox"
+  county_dir = os.path.join(base_dir, county_name)
+  file_path = os.path.join(county_dir, f"{county_name}.pickle")
+  with open(file_path, 'rb') as file:
+    month_composites = pickle.load(file)
+
+  return month_composites
+
+
+def visualize_risk_map(ntls, save_dir, save_folder, dataset):
+  eid_path = os.path.dirname(os.path.dirname(save_dir))
+
+  county_names = sorted(os.listdir(dataset.data_dir))
+  save_dir = os.path.join(eid_path, save_folder)
+  os.makedirs(save_dir, exist_ok=True)
+
+  case_study_county_idx = [2, 34, 36]
+
+  for idx in range(ntls.shape[0]):
+    for horizon in range(ntls.shape[2]):
+
+      horizon_folder_path = os.path.join(save_dir, str(horizon + 1))
+      os.makedirs(horizon_folder_path, exist_ok=True)
+
+      for county_idx in case_study_county_idx:
+        county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx])
+        os.makedirs(county_horizon_folder_path, exist_ok=True)
+
+        filename = dataset.sorted_image_paths[county_names[county_idx]][idx + horizon + dataset.horizon].split('.')[0]
+        save_path = os.path.join(county_horizon_folder_path, filename)
+
+        ntl = ntls[idx, county_idx, horizon]
+        ntl_np = ntl_tensor_to_np(ntl, dataset, denorm=True)
+        pon_ntl = get_percent_of_normal_ntl(ntl_np, filename, county_names[county_idx])
+
+        # plot using red-yellow-green color map
+        fig, ax = plt.subplots(figsize=(10, 10))
+        c = ax.pcolormesh(pon_ntl, shading='auto', cmap="RdYlGn", vmin=0, vmax=100)
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.axis("off")
+        plt.savefig(save_path, bbox_inches='tight')
+        plt.close()
+
+
+def visualize_results_color(preds, reals, save_dir, dataset_dir, dataset):
   """
   Save image results from modified unet predictions.
 
@@ -372,32 +510,6 @@ def visualize_test_results(preds, reals, save_dir, dataset_dir, dataset):
           image = Image.fromarray(image_np_uint8, mode='L')
           image.save(real_image_save_path)
 
-
-def save_checkpoint(model, optimizer, epoch, filename='checkpoint.pth.tar'):
-    state = {
-        'epoch': epoch,
-        'state_dict': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-    }
-    torch.save(state, filename)
-    #print(f"Checkpoint saved to {filename}")
-
-
-
-def load_checkpoint(checkpoint_path, model, optimizer=None):
-    checkpoint = torch.load(checkpoint_path)
-    missing_keys, unexpected_keys = model.load_state_dict(checkpoint['state_dict'], strict=False)
-    
-    #if missing_keys:
-    #    print(f"Missing keys: {missing_keys}")
-    #if unexpected_keys:
-        #print(f"Unexpected keys: {unexpected_keys}")
-    #model.load_state_dict(checkpoint['state_dict'],strict=False)
-    if optimizer:
-        optimizer.load_state_dict(checkpoint['optimizer'])
-    start_epoch = checkpoint['epoch']
-    print(f"Checkpoint loaded from {checkpoint_path}, starting from epoch {start_epoch}")
-    return model
 
 def print_memory_usage():
     print(f"Allocated: {torch.cuda.memory_allocated() / 1e9} GB")

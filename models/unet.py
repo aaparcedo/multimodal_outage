@@ -31,13 +31,11 @@ default_kwargs = {
 # Hyperparameters
 
 image_dimension = 128
-batch_size = 4
 n_counties = 67
-n_timestep = 7
-feature_vector_size = 1024
+feature_vector_size = 256
 time_embed_size = 64
 loc_embed_size = 256
-compression_factor = 2
+compression_factor = 4
 
 class DoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -56,6 +54,7 @@ class DoubleConv(nn.Module):
 
 class Down(nn.Module):
     def __init__(self, in_channels, out_channels):
+
         super().__init__()
         self.maxpool_conv = nn.Sequential(
             nn.MaxPool2d(2),
@@ -94,8 +93,9 @@ class OutConv(nn.Module):
 
 
 class Contraction(nn.Module):
-    def __init__(self, in_channels):
+    def __init__(self, in_channels, horizon):
         super().__init__()
+        self.horizon = horizon
         self.inc = (DoubleConv(in_channels, 4))
         self.down1 = (Down(4, 8))
         self.down2 = (Down(8, 16))
@@ -108,28 +108,21 @@ class Contraction(nn.Module):
         encoder_input = []
 
         for county in range(n_counties):
-
             x1 = self.inc(input[county])
             self.feature_maps[0].append(x1)
-#            print(f'inc output (x1) shape: {x1.shape}')
             x2 = self.down1(x1)
             self.feature_maps[1].append(x2)
- #           print(f'down1 output (x2) shape: {x2.shape}')
             x3 = self.down2(x2)
             self.feature_maps[2].append(x3)
-  #          print(f'down2 output (x3) shape: {x3.shape}')
             x4 = self.down3(x3)
             self.feature_maps[3].append(x4)
-   #         print(f'down3 output (x4) shape: {x4.shape}')
             x5 = self.down4(x4)
             encoder_input.append(x5)
-    #        print(f'down1 output (x5) shape: {x5.shape}')
         for feature_map in range(len(self.feature_maps)):
             self.feature_maps[feature_map] = torch.stack(self.feature_maps[feature_map])
 
         encoder_input = torch.stack(encoder_input)
-        encoder_input = encoder_input.view(n_counties, n_timestep, -1)
-     #   print(f'encoder input shape: {encoder_input.shape}')
+        encoder_input = encoder_input.view(n_counties, self.horizon, -1)
         return encoder_input
 
 class Encoder(nn.Module):
@@ -156,8 +149,9 @@ class Encoder(nn.Module):
         return wave_net_input
 
 class Decoder(nn.Module):
-    def __init__(self):
+    def __init__(self, horizon):
         super(Decoder, self).__init__()
+        self.horizon = horizon
         self.compression_factor = compression_factor
         self.downsized_image_dimension = int(image_dimension / 16) # 8
         self.output_layer_size = int(self.downsized_image_dimension * self.downsized_image_dimension * 64) # 4096
@@ -175,7 +169,7 @@ class Decoder(nn.Module):
             expansion_input.append(x)
 
         expansion_input = torch.stack(expansion_input)
-        expansion_input = expansion_input.view(n_counties, n_timestep, 64, self.downsized_image_dimension, self.downsized_image_dimension)
+        expansion_input = expansion_input.view(n_counties, self.horizon, 64, self.downsized_image_dimension, self.downsized_image_dimension)
         return expansion_input
 
 class Expansion(nn.Module):
@@ -205,39 +199,29 @@ class Expansion(nn.Module):
         return predictions
 
 class Modified_UNET(nn.Module):
-    def __init__(self, st_gnn, input_channels=3, output_channels=3):
+    def __init__(self, st_gnn, horizon, input_channels=3, output_channels=3):
         super(Modified_UNET, self).__init__()
-        self.contraction = Contraction(input_channels)
+        self.horizon = horizon
+        self.contraction = Contraction(input_channels, self.horizon)
         self.encoder = Encoder()
-        self.st_gnn_in_dim = feature_vector_size + loc_embed_size + time_embed_size
-
+        self.st_gnn_in_dim = feature_vector_size + time_embed_size
 
         if st_gnn == 'gwnet':
-          self.st_gnn = gwnet(device='cuda', in_dim=self.st_gnn_in_dim, out_dim=feature_vector_size)
+          self.st_gnn = gwnet(device='cuda', in_dim=self.st_gnn_in_dim, out_dim=feature_vector_size, horizon=self.horizon)
         elif st_gnn == 'dcrnn':
           self.st_gnn = DCRNNModel(**default_kwargs).cuda()
-        elif st_gnn == 'gman':
-          self.st_gnn = gman() # TODO: implement
         else:
           print(f'Please select a valid spatiotemporal graph neural network.')
 
-        self.decoder = Decoder()
+        self.decoder = Decoder(self.horizon)
         self.expansion = Expansion(output_channels)
 
-    def forward(self, input, time_dim, loc_embeds):
-     
+    def forward(self, input, time_dim): 
         result = []
         for batch in range(input.shape[0]): 
-        #    print(f'input shape: {input.shape}')
-        #    print(f'time_dim shape: {time_dim.shape}')
             output = self.contraction(input[batch])
             output = self.encoder(output)
-
-        #    print(f'output shape: {output.shape}')
-        #    print(f'time_dim[batch] shape: {time_dim[batch].shape}')
-        #    print(f'loc embeds shape: {loc_embeds.shape}')
-            output = torch.cat((output, time_dim[batch], loc_embeds[batch]), dim=-1)
-        #    print(f'output shape (before st_gnn): {output.shape}')
+            output = torch.cat((output, time_dim[batch]), dim=-1)
             output = self.st_gnn(output)
             output = self.decoder(output)
             feature_maps = self.contraction.feature_maps

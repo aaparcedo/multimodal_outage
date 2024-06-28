@@ -6,7 +6,7 @@ import os
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_test_results
+from utils import BlackMarbleDataset, mse_per_pixel, rmse_per_pixel, mae_per_pixel, mape_per_pixel, load_adj, load_checkpoint, visualize_results_raster
 from models.unet  import Modified_UNET
 import pandas as pd
 import numpy as np
@@ -16,10 +16,8 @@ torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-ntl_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl"
-pon_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/percent_normal/"
-ntl_gray_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/ntl_gray/"
-dir_image = ntl_gray_dir
+ntl_gap_fill_dir = "/groups/mli/multimodal_outage/data/black_marble/hq/original_gap_fill_rectangle"
+dir_image = ntl_gap_fill_dir
 
 train_ia_id, test_m = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_michael': pd.Timestamp('2018-10-10')}
 train_m_id, test_ia = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}, {'h_ian': pd.Timestamp('2022-09-26')}
@@ -37,7 +35,7 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
 
   # Load dataset
   if dataset is None:  
-    dataset = BlackMarbleDataset(dir_image, size=size, case_study=test_m, start_index=horizon)
+    dataset = BlackMarbleDataset(dir_image, size=size, case_study=test_m, horizon=horizon)
 
   print(f'Size of test dataset: {len(dataset)}')
 
@@ -104,7 +102,8 @@ def test_model(st_gnn='gwnet', batch_size=1, horizon=7, size='S', job_id='test',
   reals = torch.cat(real, dim=0) 
 
   if visualize:
-    visualize_test_results(preds=preds, reals=reals, save_dir=job_id_folder_path, dataset_dir=dir_image, dataset=dataset)
+    visualize_results_raster(preds=preds, save_dir=job_id_folder_path, save_folder='preds', dataset_dir=dir_image, dataset=dataset)
+    visualize_results_raster(preds=reals, save_dir=job_id_folder_path, save_folder='reals', dataset_dir=dir_image, dataset=dataset)
 
   h_rmse_hist = []
   h_mae_hist = []
