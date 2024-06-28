@@ -58,7 +58,6 @@ class LitModified_UNET(L.LightningModule):
 
   def configure_optimizers(self):
     optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
-    #scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5)
     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=10) 
     print(optimizer)
     print(scheduler)
@@ -158,7 +157,7 @@ def prepare_dataset(test_case, batch_size, horizon):
   else:
     print(f'Error, pick a valid test case.')
 
-  dataset = BlackMarbleDataset(DATA_PATH, size='S', case_study=train_val_case, horizon=horizon)
+  dataset = BlackMarbleDataset(DATA_PATH, dataset_range=30, case_study=train_val_case, horizon=horizon)
   n_val = int(len(dataset) * 0.3)
   n_train = len(dataset) - n_val
   train_set, val_set= random_split(dataset, [n_train, n_val])
@@ -175,7 +174,7 @@ def prepare_dataset(test_case, batch_size, horizon):
 
   return train_loader, val_loader, test_loader
 
-def main(st_gnn, test_case, epochs, batch_size, horizon, size, job_id, num_runs, device):
+def main(st_gnn, test_case, epochs, batch_size, horizon, dataset_range, job_id, num_runs, device):
 
   early_stop_callback = EarlyStopping(
     monitor='val_loss',
@@ -213,7 +212,7 @@ def get_args():
   parser.add_argument('--case', dest='case', type=str, default='michael', help='Test case')
   parser.add_argument('--batch_size', dest='batch_size', type=int, default=16, help='Batch size')
   parser.add_argument('--horizon', dest='horizon', type=int, default=7, help='Timestep horizon')
-  parser.add_argument('--size', dest='size', type=str, default='S', help='Dataset size/horizon')
+  parser.add_argument('--dataset_range', dest='dataset_range', type=int, default=30, help='Dataset size/range')
   parser.add_argument('--job_id', dest='job_id', type=str, default='test', help='Slurm job ID')
   parser.add_argument('--num_runs', dest='num_runs', type=int, default=1, help='Number of times to repeat the same experiment')
   parser.add_argument('--device', dest='device', type=str, default='cuda', help='Select device, i.e., "cpu" or "cuda"')
@@ -222,4 +221,4 @@ def get_args():
 if __name__ == '__main__':
   args = get_args()
   print(args)
-  main(st_gnn=args.st_gnn, test_case=args.case, epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, size=args.size, job_id=args.job_id, num_runs=args.num_runs, device=args.device)
+  main(st_gnn=args.st_gnn, test_case=args.case, epochs=args.epochs, batch_size=args.batch_size, horizon=args.horizon, dataset_range=args.dataset_range, job_id=args.job_id, num_runs=args.num_runs, device=args.device)

@@ -11,7 +11,7 @@ from scipy.sparse import linalg
 import pickle
 
 class BlackMarbleDataset(Dataset):
-    def __init__(self, data_dir, size, case_study, horizon=7, transform=None):
+    def __init__(self, data_dir, dataset_range, case_study, horizon=7, transform=None):
         self.data_dir = data_dir
         self.size = size
         self.horizon = horizon
@@ -21,7 +21,7 @@ class BlackMarbleDataset(Dataset):
         # Sorting each county's images by date
         self.sorted_image_paths = {
           county: find_case_study_dates(
-            size,
+            dataset_range,
             sorted(os.listdir(os.path.join(data_dir, county)),
               key=lambda x: (int(x.split('_')[0]), int(x.split('_')[1]), int(x.split('_')[2].split('.')[0]))),
             case_study=case_study  
@@ -44,6 +44,16 @@ class BlackMarbleDataset(Dataset):
       return tensor * std + mean
 
     def open_pickle_as_tensor(self, image_path):
+      """
+      Open pickle file of xarray object with radiance data.
+      
+      Parameters:
+      - image_path (str): path of pickle file
+
+      Returns:
+      - data_tensor (torch.tensor): tensor with radiance data
+      """
+
       with open(image_path, 'rb') as file:
         data = pickle.load(file)
       data_np = data["Gap_Filled_DNB_BRDF-Corrected_NTL"].values
@@ -95,51 +105,40 @@ class BlackMarbleDataset(Dataset):
         return (past_image_tensor, future_image_tensor, time_embeds) 
 
 
-from Model import Date2VecConvert
+from date2vec import Date2VecConvert
 d2v = Date2VecConvert(model_path="./d2v_model/d2v_98291_17.169918439404636.pth")
 
 def generate_Date2Vec(filepath):
   """
-  Generates time embeddings given a list of dates.
+  Generates time embedding given a file path.
   Paper: https://arxiv.org/abs/1907.05321
   Code: https://github.com/ojus1/Date2Vec
+
+  Parameters:
+  - filepath (str): e.g., /dataset/alachua/2022_09_28.pickle 
+
+  Returns:
+  - time_embed (torch.tensor)
   """
 
   year, month, day = filepath.split('/')[-1].split('.')[0].split('_')
   
   x = torch.Tensor([[00, 00, 00, int(year), int(month), int(day)]]).float()
 
-  time_embeds = d2v(x)
-  return time_embeds
+  time_embed = d2v(x)
+  return time_embed
 
 
-def find_case_study_dates(size, image_paths, case_study):
+def find_case_study_dates(dataset_range, image_paths, case_study):
     
-    if size == 'test':
-      horizon = 15
-    elif size == 'S':
-      horizon = 30 # or 90 
-    elif size == 'M':
-      horizon = 60
-    elif size == 'L':
-      horizon = 90
-    elif size == 'XL':
-      horizon = 120
-    elif size == 'XXL':
-      horizon = 150
-    elif size == 'XXXL':
-      horizon = 180
-    else:
-      print('Invalid size. Please select a valid size, i.e., "S", "M", or "L"')
-
     timestamp_to_image = {pd.Timestamp(image_path.split('.')[0].replace('_', '-')): image_path for image_path in image_paths}
     dates = [pd.Timestamp(image_path.split('.')[0].replace('_', '-')) for image_path in image_paths]
     case_study_indices = [dates.index(date) for date in case_study.values()]
     filtered_dates = set()
 
     for case_study_index in case_study_indices:
-        start_index = case_study_index - horizon
-        end_index = case_study_index + horizon
+        start_index = case_study_index - dataset_range
+        end_index = case_study_index + dataset_range
 
         case_study_dates = dates[start_index:end_index]
 
@@ -147,49 +146,6 @@ def find_case_study_dates(size, image_paths, case_study):
     filtered_image_paths = [timestamp_to_image[date] for date in sorted(filtered_dates)]
     return filtered_image_paths
 
-
-# DCRNN utilities: 
-
-def calculate_normalized_laplacian(adj):
-  """
-  # L = D^-1/2 (D-A) D^-1/2 = I - D^-1/2 A D^-1/2
-  # D = diag(A 1)
-  :param adj:
-  :return:
-  """
-  adj = sp.coo_matrix(adj)
-  d = np.array(adj.sum(1))
-  d_inv_sqrt = np.power(d, -0.5).flatten()
-  d_inv_sqrt[np.isinf(d_inv_sqrt)] = 0.
-  d_mat_inv_sqrt = sp.diags(d_inv_sqrt)
-  normalized_laplacian = sp.eye(adj.shape[0]) - adj.dot(d_mat_inv_sqrt).transpose().dot(d_mat_inv_sqrt).tocoo()
-  return normalized_laplacian
-
-
-def calculate_random_walk_matrix(adj_mx):
-  adj_mx = sp.coo_matrix(adj_mx)
-  d = np.array(adj_mx.sum(1))
-  d_inv = np.power(d, -1).flatten()
-  d_inv[np.isinf(d_inv)] = 0.
-  d_mat_inv = sp.diags(d_inv)
-  random_walk_mx = d_mat_inv.dot(adj_mx).tocoo()
-  return random_walk_mx
-
-def calculate_reverse_random_walk_matrix(adj_mx):
-  return calculate_random_walk_matrix(np.transpose(adj_mx))
-
-def calculate_scaled_laplacian(adj_mx, lambda_max=2, undirected=True):
-  if undirected:
-      adj_mx = np.maximum.reduce([adj_mx, adj_mx.T])
-  L = calculate_normalized_laplacian(adj_mx)
-  if lambda_max is None:
-      lambda_max, _ = linalg.eigsh(L, 1, which='LM')
-      lambda_max = lambda_max[0]
-  L = sp.csr_matrix(L)
-  M, _ = L.shape
-  I = sp.identity(M, format='csr', dtype=L.dtype)
-  L = (2 / lambda_max * L) - I
-  return L.astype(np.float32)
 
 # Graph WaveNet utilities:
 
@@ -224,79 +180,6 @@ def load_adj(filename, adjtype):
         return sensor_ids, sensor_id_to_ind, adj
 
 # End of Graph WaveNet utilities.
-
-
-def plot_training_history(train_loss_hist, val_loss_hist, train_rmse_hist, val_rmse_hist,
-                          train_mae_hist, val_mae_hist, train_mape_hist, val_mape_hist, save_path):
-    epochs = range(1, len(train_loss_hist) + 1)
-
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
-
-    # Plot training and validation Loss
-    axs[0, 0].plot(epochs, train_loss_hist, label='Training Loss')
-    axs[0, 0].plot(epochs, val_loss_hist, label='Validation Loss')
-    axs[0, 0].set_title('Training and Validation Loss')
-    axs[0, 0].set_xlabel('Epochs')
-    axs[0, 0].set_ylabel('Loss')
-    axs[0, 0].legend()
-
-    # Plot training and validation RMSE
-    axs[0, 1].plot(epochs, train_rmse_hist, label='Training RMSE')
-    axs[0, 1].plot(epochs, val_rmse_hist, label='Validation RMSE')
-    axs[0, 1].set_title('Training and Validation RMSE')
-    axs[0, 1].set_xlabel('Epochs')
-    axs[0, 1].set_ylabel('RMSE')
-    axs[0, 1].legend()
-
-    # Plot training and validation MAE
-    axs[1, 0].plot(epochs, train_mae_hist, label='Training MAE')
-    axs[1, 0].plot(epochs, val_mae_hist, label='Validation MAE')
-    axs[1, 0].set_title('Training and Validation MAE')
-    axs[1, 0].set_xlabel('Epochs')
-    axs[1, 0].set_ylabel('MAE')
-    axs[1, 0].legend()
-
-    # Plot training and validation MAPE
-    axs[1, 1].plot(epochs, train_mape_hist, label='Training MAPE')
-    axs[1, 1].plot(epochs, val_mape_hist, label='Validation MAPE')
-    axs[1, 1].set_title('Training and Validation MAPE')
-    axs[1, 1].set_xlabel('Epochs')
-    axs[1, 1].set_ylabel('MAPE')
-    axs[1, 1].legend()
-
-    plt.tight_layout()
-    plt.savefig(save_path)
-
-
-
-def plot_error_metrics(runs_metrics, save_path):
-    metrics = ['val_loss', 'val_rmse', 'val_mae', 'val_mape']
-    events = list(runs_metrics.keys())
-    
-    # Calculate vmin and vmax for each metric
-    metric_min_max = {}
-    for metric in metrics:
-        all_values = []
-        for event in events:
-            for run_data in runs_metrics[event][metric]:
-                all_values.extend(run_data)
-        metric_min_max[metric] = (min(all_values), max(all_values))
-    
-    fig, axes = plt.subplots(4, 3, figsize=(15, 20))
-    fig.subplots_adjust(hspace=0.4, wspace=0.4)
-    
-    for col, event in enumerate(events):
-        for row, metric in enumerate(metrics):
-            for run in range(len(runs_metrics[event][metric])):
-                axes[row, col].plot(runs_metrics[event][metric][run], label=f'Run {run+1}')
-            axes[row, col].set_title(f'{event} - {metric.upper()}')
-            axes[row, col].set_xlabel('Epoch')
-            axes[row, col].set_ylabel(metric.upper())
-            axes[row, col].set_ylim(metric_min_max[metric])  # Set the same vmin and vmax for the metric
-            if row == 0:
-                axes[row, col].legend()
-
-    plt.savefig(save_path)
 
 def ntl_tensor_to_np(ntl, dataset=None, denorm=True):
   if denorm:
@@ -453,62 +336,6 @@ def visualize_risk_map(ntls, save_dir, save_folder, dataset):
         plt.axis("off")
         plt.savefig(save_path, bbox_inches='tight')
         plt.close()
-
-
-def visualize_results_color(preds, reals, save_dir, dataset_dir, dataset):
-  """
-  Save image results from modified unet predictions.
-
-  Parameters:
-  - preds (torch.Tensor): output predictions from modified unet model
-  - save_dir (str): directory of to save images
-  - dataset_dir (str): directory of dataset images
-  - dataset (BlackMarbleDataset): dataset object  
-
-  Returns:
-  - N/A
-  """
-
-  county_names = sorted(os.listdir(dataset_dir))
-  preds_save_dir = os.path.join(save_dir, 'preds')
-  reals_save_dir = os.path.join(save_dir, 'reals')
-  os.makedirs(preds_save_dir, exist_ok=True)
-  os.makedirs(reals_save_dir, exist_ok=True)
-
-  for pred_idx in range(preds.shape[0]):
-    for horizon in range(preds.shape[2]):
-
-      horizon_folder_path = os.path.join(preds_save_dir, str(horizon + 1)) # /logs/job_id/test_preds/horizon/
-      reals_horizon_folder_path = os.path.join(reals_save_dir, str(horizon + 1))
-
-      os.makedirs(horizon_folder_path, exist_ok=True)
-      os.makedirs(reals_horizon_folder_path, exist_ok=True)
-
-      for county_idx in range(preds.shape[1]):
-        county_horizon_folder_path = os.path.join(horizon_folder_path, county_names[county_idx]) # /logs/job_id/test_preds/horizon/county/
-        os.makedirs(county_horizon_folder_path, exist_ok=True)
-
-        image_name = dataset.sorted_image_paths[county_names[county_idx]][pred_idx + horizon + dataset.start_index]
-        image_save_path = os.path.join(county_horizon_folder_path, image_name)
-
-        image_tensor = preds[pred_idx, county_idx, horizon]
-        image_np = dataset.denormalize(image_tensor[0]).cpu().numpy()
-        image_np = np.clip(image_np, 0, 1)
-        image_np_uint8 = (image_np * 255).astype(np.uint8)
-        image = Image.fromarray(image_np_uint8, mode='L')
-
-        image.save(image_save_path)
-        
-        if reals is not None:
-          reals_county_horizon_folder_path = os.path.join(reals_horizon_folder_path, county_names[county_idx])
-          os.makedirs(reals_county_horizon_folder_path, exist_ok=True)
-          real_image_save_path = os.path.join(reals_county_horizon_folder_path, image_name)
-          image_tensor = reals[pred_idx, county_idx, horizon]
-          image_np = dataset.denormalize(image_tensor[0]).cpu().numpy()
-          image_np = np.clip(image_np, 0, 1)
-          image_np_uint8 = (image_np * 255).astype(np.uint8)
-          image = Image.fromarray(image_np_uint8, mode='L')
-          image.save(real_image_save_path)
 
 
 def print_memory_usage():

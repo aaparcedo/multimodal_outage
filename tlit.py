@@ -50,7 +50,7 @@ def test_model(checkpoint_path, test_dir, st_gnn, horizon, device, batch_size=32
   model.eval()
 
   # Setup test dataset and dataloader
-  test_dataset = BlackMarbleDataset(test_dir, size='S', case_study=test_idalia, horizon=horizon)
+  test_dataset = BlackMarbleDataset(test_dir, datset_range=30, case_study=test_idalia, horizon=horizon)
   test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=2)
  
   print(f'Test Set: {test_dataset.case_study}')
