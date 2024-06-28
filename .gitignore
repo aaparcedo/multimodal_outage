@@ -1,4 +1,10 @@
 __pycache__/
+/lightning_logs/
+data/eaglei/
+county_data.pickle
+eda/download.py
+fl_county_loc_embeds.pt
+fl_shapefile_n_centroids.pickle
 Graph-WaveNet/
 */figures/
 find_normalization.py
