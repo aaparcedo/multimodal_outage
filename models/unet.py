@@ -8,25 +8,8 @@ import sys
 import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
-
 from .graph_wavenet import gwnet
-from .dcrnn import DCRNNModel
 
-# DCRNN kwargs
-default_kwargs = {
-  'batch_size': 1,
-  'filter_type': 'dual_random_walk',
-  'horizon': 7,
-  'input_dim': 16,
-  'max_diffusion_step': 2,
-  'num_nodes': 67,
-  'num_rnn_layers': 2,
-  'output_dim': 16,
-  'rnn_units': 64,
-  'seq_len': 7,
-}
-
-# DCRNN kwargs above
 
 # Hyperparameters
 
@@ -42,10 +25,10 @@ class DoubleConv(nn.Module):
         super().__init__()
         self.double_conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
+            #nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(out_channels),
+            #nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
 
@@ -208,8 +191,6 @@ class Modified_UNET(nn.Module):
 
         if st_gnn == 'gwnet':
           self.st_gnn = gwnet(device='cuda', in_dim=self.st_gnn_in_dim, out_dim=feature_vector_size, horizon=self.horizon)
-        elif st_gnn == 'dcrnn':
-          self.st_gnn = DCRNNModel(**default_kwargs).cuda()
         else:
           print(f'Please select a valid spatiotemporal graph neural network.')
 

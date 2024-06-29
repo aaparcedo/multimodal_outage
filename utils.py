@@ -1,5 +1,5 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
 import os
 from PIL import Image
@@ -10,10 +10,12 @@ import scipy.sparse as sp
 from scipy.sparse import linalg
 import pickle
 
+DATA_PATH  = "/groups/mli/multimodal_outage/data/black_marble/hq/original_gap_fill_rectangle_proximity"
+
 class BlackMarbleDataset(Dataset):
     def __init__(self, data_dir, dataset_range, case_study, horizon=7, transform=None):
         self.data_dir = data_dir
-        self.size = size
+        self.dataset_range = dataset_range
         self.horizon = horizon
         self.county_names = sorted(os.listdir(data_dir))
         self.case_study = case_study
@@ -105,7 +107,41 @@ class BlackMarbleDataset(Dataset):
         return (past_image_tensor, future_image_tensor, time_embeds) 
 
 
-from date2vec import Date2VecConvert
+def prepare_dataloaders(test_case, batch_size, horizon):
+  """
+  test_case (str): name of hurricane test case, used to select train/val and test sets
+  """
+
+  if test_case == 'michael':
+    train_val_case = {'h_ian': pd.Timestamp('2022-09-26'), 'h_idalia': pd.Timestamp('2023-08-30')}
+    test_case = {'h_michael': pd.Timestamp('2018-10-10')}
+  elif test_case == 'ian':
+    train_val_case = {'h_michael': pd.Timestamp('2018-10-10'), 'h_idalia': pd.Timestamp('2023-08-30')}
+    test_case = {'h_ian': pd.Timestamp('2022-09-26')}
+  elif test_case == 'idalia':
+    train_val_case = {'h_ian': pd.Timestamp('2022-09-26'), 'h_michael': pd.Timestamp('2018-10-10')}
+    test_case = {'h_idalia': pd.Timestamp('2023-08-30')}
+  else:
+    print(f'Error, pick a valid test case.')
+
+  dataset = BlackMarbleDataset(DATA_PATH, dataset_range=30, case_study=train_val_case, horizon=horizon)
+  n_val = int(len(dataset) * 0.3)
+  n_train = len(dataset) - n_val
+  train_set, val_set= random_split(dataset, [n_train, n_val])
+  loader_args = dict(batch_size=batch_size, num_workers=2)
+  train_loader = DataLoader(train_set, shuffle=True, **loader_args)
+  val_loader = DataLoader(val_set, shuffle=False, **loader_args)
+
+  test_dataset = BlackMarbleDataset(DATA_PATH, dataset_range=30, case_study=test_case, horizon=horizon)
+  test_loader = DataLoader(test_dataset, shuffle=False, **loader_args)
+
+  print(f'Size of train_set: {len(train_set)}, val_set: {len(val_set)}, and test_set: {len(test_dataset)}')
+  print(f'Train/val case study(s): {dataset.case_study}')
+  print(f'Test case study(s): {test_dataset.case_study}')
+
+  return train_loader, train_set, val_loader, val_set, test_loader, test_dataset
+
+from Model import Date2VecConvert
 d2v = Date2VecConvert(model_path="./d2v_model/d2v_98291_17.169918439404636.pth")
 
 def generate_Date2Vec(filepath):
@@ -147,41 +183,15 @@ def find_case_study_dates(dataset_range, image_paths, case_study):
     return filtered_image_paths
 
 
-# Graph WaveNet utilities:
-
-def asym_adj(adj):
-    adj = sp.coo_matrix(adj)
-    rowsum = np.array(adj.sum(1)).flatten()
-    d_inv = np.power(rowsum, -1).flatten()
-    d_inv[np.isinf(d_inv)] = 0.
-    d_mat = sp.diags(d_inv)
-    return d_mat.dot(adj).astype(np.float32).todense()
-
-
-def load_adj(filename, adjtype):
-
-    # Load the adjacency matrix from csv file
-
-    if (filename.endswith('.csv')):
-        adj_mx = pd.read_csv(filename, index_col=0)
-        adj_mx = adj_mx.values
-    else:
-        sensor_ids, sensor_id_to_ind, adj_mx = load_pickle(filename)
-
-    if adjtype == "doubletransition":
-        adj = [np.diag(np.ones(adj_mx.shape[0])).astype(np.float32)]
-    else:
-        error = 0
-        assert error, "adj type not defined"
-
-    if (filename.endswith('.csv')):
-        return None, None, adj
-    else:
-        return sensor_ids, sensor_id_to_ind, adj
-
-# End of Graph WaveNet utilities.
-
 def ntl_tensor_to_np(ntl, dataset=None, denorm=True):
+  """
+  Convert ntl torch.tensor (C, H, W) to np.array (H, W)
+ 
+  Parameters:
+  - ntl (torch.tensor): radiance data
+  - dataset (BlackMarleDataset): used to call dataset denormalize function
+  - denorm (bool): whether to apply denormalization or not
+  """
   if denorm:
     ntl = dataset.denormalize(ntl).cpu()
   
@@ -204,6 +214,8 @@ def visualize_results_raster(preds, save_dir, save_folder, dataset_dir, dataset)
  
   case_study_county_idx = [2, 34, 36]
  
+  image_list = []
+
   for pred_idx in range(preds.shape[0]):
     for pred_horizon in range(preds.shape[2]):
 
@@ -227,9 +239,15 @@ def visualize_results_raster(preds, save_dir, save_folder, dataset_dir, dataset)
         ax.set_xticks([])
         ax.set_yticks([])
         plt.tight_layout()
-        plt.savefig(pred_save_path, bbox_inches='tight')
+        #plt.savefig(pred_save_path, bbox_inches='tight')
+
+        fig.canvas.draw()
+        w, h = fig.canvas.get_width_height()
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8').reshape(h, w, 3)
+
         plt.close()
 
+  return image_list
 
 def get_percent_of_normal_ntl(ntl, filename, county_name):
   """
@@ -312,6 +330,9 @@ def visualize_risk_map(ntls, save_dir, save_folder, dataset):
 
   case_study_county_idx = [2, 34, 36]
 
+  image_list = []
+  filename_list = []
+
   for idx in range(ntls.shape[0]):
     for horizon in range(ntls.shape[2]):
 
@@ -334,8 +355,16 @@ def visualize_risk_map(ntls, save_dir, save_folder, dataset):
         c = ax.pcolormesh(pon_ntl, shading='auto', cmap="RdYlGn", vmin=0, vmax=100)
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
         plt.axis("off")
-        plt.savefig(save_path, bbox_inches='tight')
+        #plt.savefig(save_path, bbox_inches='tight')
+
+        fig.canvas.draw()
+        w, h = fig.canvas.get_width_height()
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype='uint8').reshape(h, w, 3)
+        image_list.append(image)
+        filename_list.append(filename)
         plt.close()
+  
+  return filename_list, image_list
 
 
 def print_memory_usage():
